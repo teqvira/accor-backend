@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { env } from '../config/env';
+import { env } from '../../../config/env';
 
 export function generateOtp(): string {
   const max = 10 ** env.OTP_LENGTH;

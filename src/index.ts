@@ -1,7 +1,7 @@
 import app from './app';
 import { env } from './config/env';
-import { connectDatabase } from './db/connection';
-import { bootstrapAdmin } from './utils/bootstrap';
+import { connectDatabase } from './database/connection';
+import { bootstrapAdmin } from './modules/auth';
 
 async function main() {
   await connectDatabase();

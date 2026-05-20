@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { ApiErrorResponse, ApiResponse } from '../types';
+import { ApiErrorResponse, ApiResponse } from '../types/api.types';
 
 export function buildErrorBody(
   userMessage: string,

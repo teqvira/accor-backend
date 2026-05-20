@@ -1,7 +1,7 @@
 import { Response } from 'express';
+import { sendSuccess } from '../../../shared/utils/response';
+import { AuthRequest } from '../types/auth.types';
 import { authService } from '../services/auth.service';
-import { AuthRequest } from '../types';
-import { sendSuccess } from '../utils/response';
 
 export class AuthController {
   async createUser(req: AuthRequest, res: Response): Promise<void> {

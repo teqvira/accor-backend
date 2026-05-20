@@ -1,26 +1,26 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Types } from 'mongoose';
-import { env } from '../config/env';
-import { RefreshToken } from '../models/RefreshToken';
-import { IUser, User, UserRole } from '../models/User';
-import { JwtAccessPayload } from '../types';
+import { env } from '../../../config/env';
 import {
   BadRequestError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
-} from '../utils/errors';
+} from '../../../shared/utils/errors';
+import { JwtAccessPayload } from '../types/auth.types';
+import { RefreshToken } from '../models/refresh-token.model';
+import { IUser, User, UserRole } from '../models/user.model';
+import { sendOtpEmail } from './email.service';
 import {
   signAccessToken,
   signRefreshToken,
   signResetToken,
   verifyRefreshToken,
   verifyResetToken,
-} from '../utils/jwt';
-import { generateOtp, hashOtp, verifyOtpHash } from '../utils/otp';
-import { sendOtpEmail } from './email.service';
+} from '../utils/jwt.util';
+import { generateOtp, hashOtp, verifyOtpHash } from '../utils/otp.util';
 
 const ROLE_RANK: Record<UserRole, number> = {
   [UserRole.USER]: 1,

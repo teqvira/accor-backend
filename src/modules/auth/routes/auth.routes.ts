@@ -1,10 +1,12 @@
 import { Response, Router } from 'express';
+import { validate } from '../../../shared/middleware/validate';
 import { authController } from '../controllers/auth.controller';
-import { authenticate } from '../middleware/auth';
-import { requireBearerToken } from '../middleware/bearerToken';
-import { requireRoles } from '../middleware/roleGuard';
-import { validate } from '../middleware/validate';
-import { UserRole } from '../models/User';
+import {
+  authenticate,
+  requireBearerToken,
+  requireRoles,
+} from '../middleware/auth.middleware';
+import { UserRole } from '../models/user.model';
 import {
   createUserSchema,
   forgotPasswordSchema,
@@ -23,7 +25,6 @@ const asyncHandler =
     Promise.resolve(fn(req, res)).catch(next);
   };
 
-// Role-based user creation (admin / moderator)
 router.post(
   '/users',
   authenticate,
@@ -62,14 +63,12 @@ router.post(
   asyncHandler((req, res) => authController.verifyOtp(req, res))
 );
 
-// After forgot-password flow (uses resetToken from verify-otp)
 router.post(
   '/reset-password/otp',
   validate(resetPasswordWithTokenSchema),
   asyncHandler((req, res) => authController.resetPasswordWithToken(req, res))
 );
 
-// Authenticated — change password with current password
 router.post(
   '/reset-password',
   authenticate,

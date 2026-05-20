@@ -1,10 +1,10 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
-import { env } from '../config/env';
+import { env } from '../../../config/env';
 import {
   JwtAccessPayload,
   JwtRefreshPayload,
   JwtResetPayload,
-} from '../types';
+} from '../types/auth.types';
 
 function signToken(
   payload: object,

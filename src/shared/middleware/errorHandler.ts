@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { env } from '../config/env';
+import { env } from '../../config/env';
 import { AppError } from '../utils/errors';
 import { buildErrorBody, sendError } from '../utils/response';
 
