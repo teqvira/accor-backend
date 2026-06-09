@@ -3,7 +3,8 @@ import { UserRole } from '../models/user.model';
 
 export interface JwtAccessPayload {
   sub: string;
-  email: string;
+  email?: string;
+  mobileNumber?: string;
   role: UserRole;
 }
 

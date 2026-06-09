@@ -3,6 +3,7 @@ import { validate } from '../../../shared/middleware/validate';
 import { authController } from '../controllers/auth.controller';
 import {
   authenticate,
+  optionalAuthenticate,
   requireBearerToken,
   requireRoles,
 } from '../middleware/auth.middleware';
@@ -12,9 +13,12 @@ import {
   forgotPasswordSchema,
   loginSchema,
   refreshTokenSchema,
+  resendMobileOtpSchema,
   resetPasswordWithCurrentSchema,
   resetPasswordWithTokenSchema,
-  verifyOtpSchema,
+  sendMobileOtpSchema,
+  verifyMobileOtpSchema,
+  verifyPasswordOtpSchema,
 } from '../validators/auth.validator';
 
 const router = Router();
@@ -28,7 +32,7 @@ const asyncHandler =
 router.post(
   '/users',
   authenticate,
-  requireRoles(UserRole.ADMIN, UserRole.MODERATOR),
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN),
   validate(createUserSchema),
   asyncHandler((req, res) => authController.createUser(req, res))
 );
@@ -37,6 +41,27 @@ router.post(
   '/login',
   validate(loginSchema),
   asyncHandler((req, res) => authController.login(req, res))
+);
+
+router.post(
+  '/send-mobile-otp',
+  optionalAuthenticate,
+  validate(sendMobileOtpSchema),
+  asyncHandler((req, res) => authController.sendMobileOtp(req, res))
+);
+
+router.post(
+  '/resend-mobile-otp',
+  optionalAuthenticate,
+  validate(resendMobileOtpSchema),
+  asyncHandler((req, res) => authController.resendMobileOtp(req, res))
+);
+
+router.post(
+  '/verify-mobile-otp',
+  optionalAuthenticate,
+  validate(verifyMobileOtpSchema),
+  asyncHandler((req, res) => authController.verifyMobileOtp(req, res))
 );
 
 router.post(
@@ -59,8 +84,8 @@ router.post(
 
 router.post(
   '/verify-otp',
-  validate(verifyOtpSchema),
-  asyncHandler((req, res) => authController.verifyOtp(req, res))
+  validate(verifyPasswordOtpSchema),
+  asyncHandler((req, res) => authController.verifyPasswordOtp(req, res))
 );
 
 router.post(

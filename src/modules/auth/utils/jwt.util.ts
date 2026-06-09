@@ -7,12 +7,24 @@ import {
 } from '../types/auth.types';
 
 function signToken(
-  payload: object,
+  payload: JwtAccessPayload | JwtRefreshPayload | JwtResetPayload,
   secret: string,
   expiresIn: string
 ): string {
-  const options: SignOptions = { expiresIn: expiresIn as SignOptions['expiresIn'] };
+  const options: SignOptions = {
+    expiresIn: expiresIn as SignOptions['expiresIn'],
+  };
   return jwt.sign(payload, secret, options);
+}
+
+function assertJwtObject(
+  decoded: jwt.JwtPayload | string | undefined,
+  label: string
+): jwt.JwtPayload {
+  if (!decoded || typeof decoded === 'string') {
+    throw new Error(`Invalid ${label} token payload`);
+  }
+  return decoded;
 }
 
 export function signAccessToken(payload: JwtAccessPayload): string {
@@ -28,17 +40,52 @@ export function signResetToken(payload: JwtResetPayload): string {
 }
 
 export function verifyAccessToken(token: string): JwtAccessPayload {
-  return jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtAccessPayload;
+  const decoded = assertJwtObject(
+    jwt.verify(token, env.JWT_ACCESS_SECRET) as jwt.JwtPayload | string,
+    'access'
+  );
+
+  if (typeof decoded.sub !== 'string' || typeof decoded.role !== 'string') {
+    throw new Error('Invalid access token payload');
+  }
+
+  return {
+    sub: decoded.sub,
+    email: typeof decoded.email === 'string' ? decoded.email : undefined,
+    mobileNumber:
+      typeof decoded.mobileNumber === 'string' ? decoded.mobileNumber : undefined,
+    role: decoded.role as JwtAccessPayload['role'],
+  };
 }
 
 export function verifyRefreshToken(token: string): JwtRefreshPayload {
-  return jwt.verify(token, env.JWT_REFRESH_SECRET) as JwtRefreshPayload;
+  const decoded = assertJwtObject(
+    jwt.verify(token, env.JWT_REFRESH_SECRET) as jwt.JwtPayload | string,
+    'refresh'
+  );
+
+  if (typeof decoded.sub !== 'string' || typeof decoded.tokenId !== 'string') {
+    throw new Error('Invalid refresh token payload');
+  }
+
+  return {
+    sub: decoded.sub,
+    tokenId: decoded.tokenId,
+  };
 }
 
 export function verifyResetToken(token: string): JwtResetPayload {
-  const payload = jwt.verify(token, env.JWT_RESET_SECRET) as JwtResetPayload;
-  if (payload.purpose !== 'password-reset') {
+  const decoded = assertJwtObject(
+    jwt.verify(token, env.JWT_RESET_SECRET) as jwt.JwtPayload | string,
+    'reset'
+  );
+
+  if (typeof decoded.sub !== 'string' || decoded.purpose !== 'password-reset') {
     throw new Error('Invalid reset token');
   }
-  return payload;
+
+  return {
+    sub: decoded.sub,
+    purpose: 'password-reset',
+  };
 }

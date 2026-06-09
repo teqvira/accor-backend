@@ -8,6 +8,11 @@ const passwordSchema = z
   .regex(/[a-z]/, 'Password must contain a lowercase letter')
   .regex(/[0-9]/, 'Password must contain a number');
 
+const mobileNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^[6-9]\d{9}$/, 'Mobile number must be a valid 10-digit Indian number');
+
 export const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
@@ -28,7 +33,7 @@ export const forgotPasswordSchema = z.object({
   email: z.string().email(),
 });
 
-export const verifyOtpSchema = z.object({
+export const verifyPasswordOtpSchema = z.object({
   email: z.string().email(),
   otp: z.string().min(4).max(8),
 });
@@ -41,4 +46,17 @@ export const resetPasswordWithTokenSchema = z.object({
 export const resetPasswordWithCurrentSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: passwordSchema,
+});
+
+export const sendMobileOtpSchema = z.object({
+  mobileNumber: mobileNumberSchema,
+});
+
+export const verifyMobileOtpSchema = z.object({
+  mobileNumber: mobileNumberSchema,
+  otp: z.string().min(4).max(8),
+});
+
+export const resendMobileOtpSchema = z.object({
+  mobileNumber: mobileNumberSchema,
 });

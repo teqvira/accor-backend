@@ -37,6 +37,25 @@ export function authenticate(
   }
 }
 
+export function optionalAuthenticate(
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction
+): void {
+  const token = getBearerToken(req);
+  if (!token) {
+    next();
+    return;
+  }
+
+  try {
+    req.user = verifyAccessToken(token);
+  } catch {
+    // Ignore invalid tokens on public OTP routes.
+  }
+  next();
+}
+
 export function requireBearerToken(
   req: AuthRequest,
   _res: Response,

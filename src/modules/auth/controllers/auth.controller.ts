@@ -14,6 +14,31 @@ export class AuthController {
     sendSuccess(res, 'Login successful', result);
   }
 
+  async sendMobileOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await authService.sendMobileOtp(
+      req.body.mobileNumber,
+      req.user?.sub
+    );
+    sendSuccess(res, result.message);
+  }
+
+  async resendMobileOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await authService.resendMobileOtp(
+      req.body.mobileNumber,
+      req.user?.sub
+    );
+    sendSuccess(res, result.message);
+  }
+
+  async verifyMobileOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await authService.verifyMobileOtp(
+      req.body.mobileNumber,
+      req.body.otp,
+      req.user?.sub
+    );
+    sendSuccess(res, 'OTP verified successfully', result);
+  }
+
   async refreshToken(req: AuthRequest, res: Response): Promise<void> {
     const tokens = await authService.refreshToken(req.body.refreshToken);
     sendSuccess(res, 'Token refreshed successfully', tokens);
@@ -29,8 +54,11 @@ export class AuthController {
     sendSuccess(res, result.message);
   }
 
-  async verifyOtp(req: AuthRequest, res: Response): Promise<void> {
-    const result = await authService.verifyOtp(req.body.email, req.body.otp);
+  async verifyPasswordOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await authService.verifyPasswordOtp(
+      req.body.email,
+      req.body.otp
+    );
     sendSuccess(res, 'OTP verified successfully', result);
   }
 

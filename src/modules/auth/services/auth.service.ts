@@ -9,10 +9,12 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../../../shared/utils/errors';
+import { isMongoDuplicateKeyError } from '../../../shared/utils/mongo';
 import { JwtAccessPayload } from '../types/auth.types';
 import { RefreshToken } from '../models/refresh-token.model';
 import { IUser, User, UserRole } from '../models/user.model';
 import { sendOtpEmail } from './email.service';
+import { sendOtpSms } from './sms.service';
 import {
   signAccessToken,
   signRefreshToken,
@@ -24,9 +26,11 @@ import { generateOtp, hashOtp, verifyOtpHash } from '../utils/otp.util';
 
 const ROLE_RANK: Record<UserRole, number> = {
   [UserRole.USER]: 1,
-  [UserRole.MODERATOR]: 2,
-  [UserRole.ADMIN]: 3,
+  [UserRole.ADMIN]: 2,
+  [UserRole.SUPER_ADMIN]: 3,
 };
+
+const ADMIN_ROLES = [UserRole.SUPER_ADMIN, UserRole.ADMIN];
 
 function canAssignRole(creatorRole: UserRole, targetRole: UserRole): boolean {
   return ROLE_RANK[creatorRole] > ROLE_RANK[targetRole];
@@ -37,8 +41,12 @@ function sanitizeUser(user: IUser) {
     id: user._id,
     name: user.name,
     email: user.email,
+    mobileNumber: user.mobileNumber,
     role: user.role,
     isActive: user.isActive,
+    isVerified: user.isVerified,
+    walletBalance: user.walletBalance,
+    rewardPoints: user.rewardPoints,
     createdAt: user.createdAt,
   };
 }
@@ -52,6 +60,7 @@ async function issueTokenPair(user: IUser) {
   const accessToken = signAccessToken({
     sub: user._id.toString(),
     email: user.email,
+    mobileNumber: user.mobileNumber,
     role: user.role,
   });
   const refreshToken = signRefreshToken({
@@ -69,6 +78,28 @@ async function issueTokenPair(user: IUser) {
   });
 
   return { accessToken, refreshToken };
+}
+
+async function setUserOtp(user: IUser, otp: string): Promise<void> {
+  user.otpHash = hashOtp(otp);
+  user.otpExpiresAt = new Date(
+    Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000
+  );
+  user.otpLastSentAt = new Date();
+  await user.save();
+}
+
+function assertOtpResendAllowed(user: IUser): void {
+  if (!user.otpLastSentAt) return;
+  const elapsed = Date.now() - user.otpLastSentAt.getTime();
+  const cooldown = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
+  if (elapsed < cooldown) {
+    const waitSeconds = Math.ceil((cooldown - elapsed) / 1000);
+    throw new BadRequestError(
+      `Please wait ${waitSeconds} seconds before requesting a new OTP`,
+      `OTP resend cooldown active for userId=${user._id}`
+    );
+  }
 }
 
 export class AuthService {
@@ -102,6 +133,7 @@ export class AuthService {
       email: input.email,
       password: hashed,
       role: input.role,
+      isVerified: true,
     });
 
     return sanitizeUser(user);
@@ -116,6 +148,13 @@ export class AuthService {
       );
     }
 
+    if (!ADMIN_ROLES.includes(user.role)) {
+      throw new UnauthorizedError(
+        'Invalid email or password',
+        `login: non-admin role attempted email login role=${user.role}`
+      );
+    }
+
     if (!user.isActive) {
       throw new UnauthorizedError(
         'Your account has been deactivated. Please contact support',
@@ -123,13 +162,127 @@ export class AuthService {
       );
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    const valid = await bcrypt.compare(password, user.password ?? '');
     if (!valid) {
       throw new UnauthorizedError(
         'Invalid email or password',
         `login: password mismatch for userId=${user._id}`
       );
     }
+
+    const tokens = await issueTokenPair(user);
+    return {
+      user: sanitizeUser(user),
+      ...tokens,
+    };
+  }
+
+  private async assertLoggedInMobileMatch(
+    mobileNumber: string,
+    loggedInUserId?: string
+  ): Promise<void> {
+    if (!loggedInUserId) return;
+
+    const loggedInUser = await User.findById(loggedInUserId);
+    if (
+      loggedInUser?.mobileNumber &&
+      loggedInUser.mobileNumber !== mobileNumber
+    ) {
+      throw new BadRequestError(
+        'You can only use your registered mobile number',
+        `assertLoggedInMobileMatch: userId=${loggedInUserId}`
+      );
+    }
+  }
+
+  async sendMobileOtp(mobileNumber: string, loggedInUserId?: string) {
+    await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
+    let user = await User.findOne({ mobileNumber }).select(
+      '+otpHash +otpExpiresAt +otpLastSentAt'
+    );
+
+    if (!user) {
+      try {
+        const created = await User.create({
+          mobileNumber,
+          role: UserRole.USER,
+          name: `User ${mobileNumber.slice(-4)}`,
+        });
+        user = await User.findById(created._id).select(
+          '+otpHash +otpExpiresAt +otpLastSentAt'
+        );
+      } catch (err: unknown) {
+        if (!isMongoDuplicateKeyError(err)) {
+          throw err;
+        }
+        user = await User.findOne({ mobileNumber }).select(
+          '+otpHash +otpExpiresAt +otpLastSentAt'
+        );
+      }
+    }
+
+    if (!user) {
+      throw new BadRequestError(
+        'Unable to process request',
+        'sendMobileOtp: user creation failed'
+      );
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError(
+        'Your account has been deactivated. Please contact support',
+        `sendMobileOtp: inactive user userId=${user._id}`
+      );
+    }
+
+    assertOtpResendAllowed(user);
+
+    const otp = generateOtp();
+    await setUserOtp(user, otp);
+    await sendOtpSms(mobileNumber, otp);
+
+    return { message: 'OTP sent successfully' };
+  }
+
+  async resendMobileOtp(mobileNumber: string, loggedInUserId?: string) {
+    return this.sendMobileOtp(mobileNumber, loggedInUserId);
+  }
+
+  async verifyMobileOtp(
+    mobileNumber: string,
+    otp: string,
+    loggedInUserId?: string
+  ) {
+    await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
+    const user = await User.findOne({ mobileNumber }).select(
+      '+otpHash +otpExpiresAt'
+    );
+
+    if (!user?.otpHash || !user.otpExpiresAt) {
+      throw new BadRequestError(
+        'No OTP request found. Please request a new OTP',
+        `verifyMobileOtp: missing otp for mobile=${mobileNumber}`
+      );
+    }
+
+    if (user.otpExpiresAt < new Date()) {
+      throw new BadRequestError(
+        'Your OTP has expired. Please request a new one',
+        `verifyMobileOtp: OTP expired for userId=${user._id}`
+      );
+    }
+
+    if (!verifyOtpHash(otp, user.otpHash)) {
+      throw new BadRequestError(
+        'The OTP you entered is incorrect',
+        `verifyMobileOtp: OTP mismatch for userId=${user._id}`
+      );
+    }
+
+    user.otpHash = undefined;
+    user.otpExpiresAt = undefined;
+    user.isVerified = true;
+    await user.save();
 
     const tokens = await issueTokenPair(user);
     return {
@@ -207,42 +360,37 @@ export class AuthService {
     }
 
     const otp = generateOtp();
-    const otpHash = hashOtp(otp);
-    const otpExpiresAt = new Date(
-      Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000
-    );
-
-    user.otpHash = otpHash;
-    user.otpExpiresAt = otpExpiresAt;
-    await user.save();
-
-    await sendOtpEmail(user.email, otp);
+    await setUserOtp(user, otp);
+    if (user.email) {
+      await sendOtpEmail(user.email, otp);
+    }
 
     return { message: 'If the email exists, an OTP has been sent' };
   }
 
-  async verifyOtp(email: string, otp: string) {
-    const user = await User.findOne({ email })
-      .select('+otpHash +otpExpiresAt');
+  async verifyPasswordOtp(email: string, otp: string) {
+    const user = await User.findOne({ email }).select(
+      '+otpHash +otpExpiresAt'
+    );
 
     if (!user?.otpHash || !user.otpExpiresAt) {
       throw new BadRequestError(
         'No password reset request found. Please request a new OTP',
-        `verifyOtp: missing otpHash or otpExpiresAt for email=${email}`
+        `verifyPasswordOtp: missing otpHash or otpExpiresAt for email=${email}`
       );
     }
 
     if (user.otpExpiresAt < new Date()) {
       throw new BadRequestError(
         'Your OTP has expired. Please request a new one',
-        `verifyOtp: OTP expired at ${user.otpExpiresAt.toISOString()} for userId=${user._id}`
+        `verifyPasswordOtp: OTP expired at ${user.otpExpiresAt.toISOString()} for userId=${user._id}`
       );
     }
 
     if (!verifyOtpHash(otp, user.otpHash)) {
       throw new BadRequestError(
         'The OTP you entered is incorrect',
-        `verifyOtp: OTP hash mismatch for userId=${user._id}`
+        `verifyPasswordOtp: OTP hash mismatch for userId=${user._id}`
       );
     }
 
@@ -298,7 +446,7 @@ export class AuthService {
       );
     }
 
-    const valid = await bcrypt.compare(currentPassword, user.password);
+    const valid = await bcrypt.compare(currentPassword, user.password ?? '');
     if (!valid) {
       throw new UnauthorizedError(
         'Your current password is incorrect',
