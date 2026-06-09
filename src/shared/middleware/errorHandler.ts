@@ -5,10 +5,13 @@ import { AppError } from '../utils/errors';
 import { buildErrorBody, sendError } from '../utils/response';
 
 function formatZodDeveloperMessage(err: ZodError): string {
-  const fieldErrors = err.flatten().fieldErrors;
+  const { fieldErrors } = err.flatten();
   const details = Object.entries(fieldErrors)
-    .filter(([, messages]) => messages?.length)
-    .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+    .filter((entry): entry is [string, string[]] => {
+      const messages = entry[1];
+      return Array.isArray(messages) && messages.length > 0;
+    })
+    .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
     .join('; ');
   return details || err.message;
 }
