@@ -1,19 +1,21 @@
 import app from './app';
 import { env } from './config/env';
-import { connectDatabase } from './database/connection';
+import pool from './database/connection';
 import { bootstrapAdmin } from './modules/auth';
 
-async function main() {
-  await connectDatabase();
-  await bootstrapAdmin();
+const startServer = async () => {
+  try {
+    await pool.query('SELECT 1');
+    console.log('Database connected: accor_db');
+    await bootstrapAdmin();
+    app.listen(env.PORT, () => {
+      console.log(`Server running on port ${env.PORT}`);
+      console.log(`Auth API: http://localhost:${env.PORT}/api/auth`);
+    });
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+};
 
-  app.listen(env.PORT, () => {
-    console.log(`Server running on http://localhost:${env.PORT}`);
-    console.log(`Auth API: http://localhost:${env.PORT}/api/auth`);
-  });
-}
-
-main().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+startServer();

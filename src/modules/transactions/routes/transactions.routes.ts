@@ -1,6 +1,6 @@
 import { Response, Router } from 'express';
 import { authenticate, requireRoles } from '../../auth/middleware/auth.middleware';
-import { UserRole } from '../../auth/models/user.model';
+import { UserRole } from '../../auth';
 import { AuthRequest } from '../../auth/types/auth.types';
 import { transactionsController } from '../controllers/transactions.controller';
 

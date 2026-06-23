@@ -1,17 +1,27 @@
-import { IPayoutProfile } from '../models/payout-profile.model';
+import { IPayoutProfile } from '../types/withdrawal.types';
 import { PayoutResult } from '../types/withdrawal.types';
+import { payoutProfileRepository } from '../repositories/payout-profile.repository';
 import { PayoutProvider } from './payout-provider.types';
 
 export class MockPayoutService implements PayoutProvider {
   async ensureFundAccount(profile: IPayoutProfile): Promise<IPayoutProfile> {
-    if (!profile.providerContactId) {
-      profile.providerContactId = `mock_contact_${profile.userId.toString()}`;
+    const providerContactId =
+      profile.providerContactId ?? `mock_contact_${profile.userId}`;
+    const providerFundAccountId =
+      profile.providerFundAccountId ?? `mock_fund_${profile.userId}`;
+
+    if (
+      profile.providerContactId === providerContactId &&
+      profile.providerFundAccountId === providerFundAccountId
+    ) {
+      return profile;
     }
-    if (!profile.providerFundAccountId) {
-      profile.providerFundAccountId = `mock_fund_${profile.userId.toString()}`;
-    }
-    await profile.save();
-    return profile;
+
+    const updated = await payoutProfileRepository.update(profile._id, {
+      providerContactId,
+      providerFundAccountId,
+    });
+    return updated ?? profile;
   }
 
   async createPayout(

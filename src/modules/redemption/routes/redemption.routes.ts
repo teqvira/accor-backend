@@ -1,7 +1,7 @@
 import { Response, Router } from 'express';
 import { validate } from '../../../shared/middleware/validate';
 import { authenticate, requireRoles } from '../../auth/middleware/auth.middleware';
-import { UserRole } from '../../auth/models/user.model';
+import { UserRole } from '../../auth';
 import { AuthRequest } from '../../auth/types/auth.types';
 import { redemptionController } from '../controllers/redemption.controller';
 import { redeemSchema } from '../validators/redemption.validator';

@@ -1,7 +1,8 @@
 import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
 import { PayoutMethod } from '../constants/withdrawal.constants';
-import { IPayoutProfile } from '../models/payout-profile.model';
+import { payoutProfileRepository } from '../repositories/payout-profile.repository';
+import { IPayoutProfile } from '../types/withdrawal.types';
 import { PayoutResult } from '../types/withdrawal.types';
 import { PayoutProvider } from './payout-provider.types';
 
@@ -59,7 +60,7 @@ export class CashfreePayoutService implements PayoutProvider {
     }
 
     const token = await getCashfreeToken();
-    const beneficiaryId = `bene_${profile.userId.toString()}`;
+    const beneficiaryId = `bene_${profile.userId}`;
 
     const body =
       profile.method === PayoutMethod.UPI
@@ -96,9 +97,10 @@ export class CashfreePayoutService implements PayoutProvider {
       );
     }
 
-    profile.cashfreeBeneficiaryId = beneficiaryId;
-    await profile.save();
-    return profile;
+    const updated = await payoutProfileRepository.update(profile._id, {
+      cashfreeBeneficiaryId: beneficiaryId,
+    });
+    return updated ?? profile;
   }
 
   async createPayout(

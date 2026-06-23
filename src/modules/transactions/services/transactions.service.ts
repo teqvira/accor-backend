@@ -1,36 +1,19 @@
-import { RedemptionTransaction } from '../models/redemption-transaction.model';
-import { WalletTransaction } from '../../wallet/models/wallet-transaction.model';
-import { RewardTransaction } from '../../rewards/models/reward-transaction.model';
-import { User, UserRole } from '../../auth/models/user.model';
-import { QrBatch } from '../../qr/models/qr-batch.model';
-import { QrCode } from '../../qr/models/qr-code.model';
-import { Campaign } from '../../campaigns/models/campaign.model';
+import { userRepository } from '../../auth/repositories/user.repository';
+import { UserRole } from '../../auth/types/user.types';
+import { campaignRepository } from '../../campaigns/repositories/campaign.repository';
+import { qrBatchRepository } from '../../qr/repositories/qr-batch.repository';
+import { qrCodeRepository } from '../../qr/repositories/qr-code.repository';
+import { rewardTransactionRepository } from '../../rewards/repositories/reward-transaction.repository';
+import { walletTransactionRepository } from '../../wallet/repositories/wallet-transaction.repository';
+import { redemptionTransactionRepository } from '../repositories/redemption-transaction.repository';
 
 export class TransactionsService {
   async listRedemptions(page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      RedemptionTransaction.find()
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('userId', 'mobileNumber name')
-        .populate('qrCodeId', 'code')
-        .populate('campaignId', 'name')
-        .lean(),
-      RedemptionTransaction.countDocuments(),
-    ]);
+    const { items, total } =
+      await redemptionTransactionRepository.findAllWithDetails(page, limit);
 
     return {
-      items: items.map((r) => ({
-        id: r._id,
-        user: r.userId,
-        qrCode: r.qrCodeId,
-        campaign: r.campaignId,
-        walletAmount: r.walletAmount,
-        rewardPoints: r.rewardPoints,
-        createdAt: r.createdAt,
-      })),
+      items,
       total,
       page,
       limit,
@@ -50,21 +33,15 @@ export class TransactionsService {
       totalWalletCredits,
       totalRewardCredits,
     ] = await Promise.all([
-      User.countDocuments({ role: UserRole.USER }),
-      QrBatch.countDocuments(),
-      QrCode.countDocuments(),
-      QrCode.countDocuments({ redeemed: true }),
-      Campaign.countDocuments(),
-      Campaign.countDocuments({ active: true }),
-      RedemptionTransaction.countDocuments(),
-      WalletTransaction.aggregate([
-        { $match: { type: 'credit' } },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-      ]),
-      RewardTransaction.aggregate([
-        { $match: { type: 'credit' } },
-        { $group: { _id: null, total: { $sum: '$points' } } },
-      ]),
+      userRepository.countUsersByRole(UserRole.USER),
+      qrBatchRepository.count(),
+      qrCodeRepository.count(),
+      qrCodeRepository.count({ redeemed: true }),
+      campaignRepository.count(),
+      campaignRepository.countActive(),
+      redemptionTransactionRepository.count(),
+      walletTransactionRepository.sumCredits(),
+      rewardTransactionRepository.sumCredits(),
     ]);
 
     return {
@@ -76,8 +53,8 @@ export class TransactionsService {
       totalCampaigns,
       activeCampaigns,
       totalRedemptions,
-      totalWalletCredits: totalWalletCredits[0]?.total ?? 0,
-      totalRewardCredits: totalRewardCredits[0]?.total ?? 0,
+      totalWalletCredits,
+      totalRewardCredits,
     };
   }
 }

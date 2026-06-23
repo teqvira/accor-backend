@@ -1,4 +1,4 @@
-import { IPayoutProfile } from '../models/payout-profile.model';
+import { IPayoutProfile } from '../types/withdrawal.types';
 import { PayoutResult } from '../types/withdrawal.types';
 
 export interface PayoutProvider {

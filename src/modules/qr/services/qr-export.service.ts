@@ -7,8 +7,8 @@ const createArchive = require('archiver') as (
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { Response } from 'express';
-import { QrCode } from '../models/qr-code.model';
 import { QrExportFormat } from '../constants/qr.constants';
+import { qrCodeRepository } from '../repositories/qr-code.repository';
 import { buildQrPayload } from './qr-generation.service';
 
 async function streamZipExport(
@@ -108,12 +108,7 @@ export async function exportBatchQrCodes(
   format: QrExportFormat,
   limit = 1000
 ): Promise<void> {
-  const qrCodes = await QrCode.find({ batchId })
-    .select('code')
-    .limit(limit)
-    .lean();
-
-  const codes = qrCodes.map((q) => q.code);
+  const codes = await qrCodeRepository.findCodesByBatchId(batchId, limit);
 
   if (codes.length === 0) {
     res.status(404).json({

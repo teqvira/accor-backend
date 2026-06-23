@@ -1,22 +1,19 @@
-import {
-  optionalSessionOptions,
-  withMongoTransaction,
-} from '../../../database/transactions';
+import { withTransaction } from '../../../database/transactions';
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from '../../../shared/utils/errors';
 import { campaignsService } from '../../campaigns/services/campaigns.service';
-import { QrCode } from '../../qr/models/qr-code.model';
-import { QrBatch } from '../../qr/models/qr-batch.model';
+import { qrBatchRepository } from '../../qr/repositories/qr-batch.repository';
+import { qrCodeRepository } from '../../qr/repositories/qr-code.repository';
 import { rewardsService } from '../../rewards/services/rewards.service';
-import { RedemptionTransaction } from '../../transactions/models/redemption-transaction.model';
+import { redemptionTransactionRepository } from '../../transactions/repositories/redemption-transaction.repository';
 import { walletService } from '../../wallet/services/wallet.service';
 
 export class RedemptionService {
   async validateCode(code: string) {
-    const qrCode = await QrCode.findOne({ code });
+    const qrCode = await qrCodeRepository.findByCode(code);
     if (!qrCode) {
       throw new NotFoundError(
         'QR code not found',
@@ -39,9 +36,7 @@ export class RedemptionService {
       );
     }
 
-    const campaign = await campaignsService.getActiveCampaignById(
-      campaignId.toString()
-    );
+    const campaign = await campaignsService.getActiveCampaignById(campaignId);
 
     if (!campaignsService.isCampaignCurrentlyValid(campaign)) {
       throw new BadRequestError(
@@ -50,7 +45,7 @@ export class RedemptionService {
       );
     }
 
-    const batch = await QrBatch.findById(qrCode.batchId);
+    const batch = await qrBatchRepository.findById(qrCode.batchId);
 
     return {
       code: qrCode.code,
@@ -64,10 +59,8 @@ export class RedemptionService {
   }
 
   async redeem(userId: string, code: string) {
-    return withMongoTransaction(async (session) => {
-      const qrCode = session
-        ? await QrCode.findOne({ code }).session(session)
-        : await QrCode.findOne({ code });
+    return withTransaction(async (client) => {
+      const qrCode = await qrCodeRepository.findByCode(code, client);
       if (!qrCode) {
         throw new NotFoundError('QR code not found', `redeem: code=${code}`);
       }
@@ -87,9 +80,7 @@ export class RedemptionService {
         );
       }
 
-      const campaign = await campaignsService.getActiveCampaignById(
-        campaignId.toString()
-      );
+      const campaign = await campaignsService.getActiveCampaignById(campaignId);
 
       if (!campaignsService.isCampaignCurrentlyValid(campaign)) {
         throw new BadRequestError(
@@ -98,17 +89,11 @@ export class RedemptionService {
         );
       }
 
-      const updatedQr = await QrCode.findOneAndUpdate(
-        { _id: qrCode._id, redeemed: false },
-        {
-          $set: {
-            redeemed: true,
-            redeemedBy: userId,
-            redeemedAt: new Date(),
-            campaignId: campaign._id,
-          },
-        },
-        { returnDocument: 'after', ...optionalSessionOptions(session) }
+      const updatedQr = await qrCodeRepository.markRedeemedByCode(
+        code,
+        userId,
+        campaign._id,
+        client
       );
 
       if (!updatedQr) {
@@ -123,7 +108,7 @@ export class RedemptionService {
         campaign.walletAmount,
         updatedQr._id,
         `QR redemption: ${code}`,
-        session
+        client
       );
 
       await rewardsService.creditInSession(
@@ -131,20 +116,18 @@ export class RedemptionService {
         campaign.rewardPoints,
         updatedQr._id,
         `QR redemption: ${code}`,
-        session
+        client
       );
 
-      const [redemptionTx] = await RedemptionTransaction.create(
-        [
-          {
-            userId,
-            qrCodeId: updatedQr._id,
-            campaignId: campaign._id,
-            walletAmount: campaign.walletAmount,
-            rewardPoints: campaign.rewardPoints,
-          },
-        ],
-        optionalSessionOptions(session)
+      const redemptionTx = await redemptionTransactionRepository.create(
+        {
+          userId,
+          qrCodeId: updatedQr._id,
+          campaignId: campaign._id,
+          walletAmount: campaign.walletAmount,
+          rewardPoints: campaign.rewardPoints,
+        },
+        client
       );
 
       return {

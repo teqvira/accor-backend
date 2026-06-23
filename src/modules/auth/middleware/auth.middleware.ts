@@ -6,7 +6,7 @@ import {
   UnauthorizedError,
 } from '../../../shared/utils/errors';
 import { AuthRequest } from '../types/auth.types';
-import { UserRole } from '../models/user.model';
+import { UserRole } from '../types/user.types';
 import { verifyAccessToken } from '../utils/jwt.util';
 
 export function authenticate(

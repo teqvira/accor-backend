@@ -1,9 +1,15 @@
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
+import { campaignRepository } from '../../campaigns/repositories/campaign.repository';
+import { ICampaign } from '../../campaigns/types/campaigns.types';
 import { campaignsService } from '../../campaigns/services/campaigns.service';
-import { Campaign, ICampaign } from '../../campaigns/models/campaign.model';
-import { QrBatch, IQrBatch, QrBatchStatus } from '../models/qr-batch.model';
-import { QrCode } from '../models/qr-code.model';
-import { CreateBatchInput } from '../types/qr.types';
+import { qrBatchRepository } from '../repositories/qr-batch.repository';
+import { qrCodeRepository } from '../repositories/qr-code.repository';
+import {
+  CreateBatchInput,
+  IQrBatch,
+  QrBatchStatus,
+  QrCodeListFilters,
+} from '../types/qr.types';
 import { generateCodesForBatch } from './qr-generation.service';
 
 function sanitizeBatch(batch: IQrBatch) {
@@ -37,7 +43,7 @@ export class QrBatchService {
   }
 
   private async getCampaignForBatch(campaignId: string): Promise<ICampaign> {
-    const campaign = await Campaign.findById(campaignId);
+    const campaign = await campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundError(
         'Campaign not found',
@@ -51,7 +57,7 @@ export class QrBatchService {
     const campaign = await this.getCampaignForBatch(input.campaignId);
     this.assertCampaignIsActiveForGeneration(campaign);
 
-    const batch = await QrBatch.create({
+    const batch = await qrBatchRepository.create({
       name: input.name,
       totalQrs: input.totalQrs,
       campaignId: campaign._id,
@@ -62,11 +68,7 @@ export class QrBatchService {
   }
 
   async listBatches(page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      QrBatch.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
-      QrBatch.countDocuments(),
-    ]);
+    const { items, total } = await qrBatchRepository.findAll(page, limit);
     return {
       items: items.map(sanitizeBatch),
       total,
@@ -77,7 +79,7 @@ export class QrBatchService {
   }
 
   async getBatchById(id: string) {
-    const batch = await QrBatch.findById(id);
+    const batch = await qrBatchRepository.findById(id);
     if (!batch) {
       throw new NotFoundError('QR batch not found', `getBatchById: id=${id}`);
     }
@@ -85,7 +87,7 @@ export class QrBatchService {
   }
 
   async generateBatch(id: string) {
-    const batch = await QrBatch.findById(id);
+    const batch = await qrBatchRepository.findById(id);
     if (!batch) {
       throw new NotFoundError('QR batch not found', `generateBatch: id=${id}`);
     }
@@ -97,7 +99,7 @@ export class QrBatchService {
       );
     }
 
-    const campaign = await this.getCampaignForBatch(batch.campaignId.toString());
+    const campaign = await this.getCampaignForBatch(batch.campaignId);
     this.assertCampaignIsActiveForGeneration(campaign);
 
     if (batch.generatedCount >= batch.totalQrs) {
@@ -108,27 +110,38 @@ export class QrBatchService {
     }
 
     const created = await generateCodesForBatch(batch);
-    batch.generatedCount += created;
-    if (batch.generatedCount >= batch.totalQrs) {
-      batch.status =
-        batch.campaignId ? QrBatchStatus.ASSIGNED : QrBatchStatus.GENERATED;
-    } else if (batch.generatedCount > 0) {
-      batch.status = batch.campaignId
+    const newGeneratedCount = batch.generatedCount + created;
+    let newStatus = batch.status;
+    if (newGeneratedCount >= batch.totalQrs) {
+      newStatus = batch.campaignId
+        ? QrBatchStatus.ASSIGNED
+        : QrBatchStatus.GENERATED;
+    } else if (newGeneratedCount > 0) {
+      newStatus = batch.campaignId
         ? QrBatchStatus.ASSIGNED
         : QrBatchStatus.GENERATED;
     }
-    await batch.save();
+
+    const updatedBatch = await qrBatchRepository.updateAfterGeneration(
+      batch._id,
+      newGeneratedCount,
+      newStatus
+    );
+
+    if (!updatedBatch) {
+      throw new NotFoundError('QR batch not found', `generateBatch: id=${id}`);
+    }
 
     return {
-      batch: sanitizeBatch(batch),
+      batch: sanitizeBatch(updatedBatch),
       newlyGenerated: created,
     };
   }
 
   async assignCampaign(batchId: string, campaignId: string) {
     const [batch, campaign] = await Promise.all([
-      QrBatch.findById(batchId),
-      Campaign.findById(campaignId),
+      qrBatchRepository.findById(batchId),
+      campaignRepository.findById(campaignId),
     ]);
 
     if (!batch) {
@@ -147,29 +160,27 @@ export class QrBatchService {
       );
     }
 
-    batch.campaignId = campaign._id;
-    batch.status = QrBatchStatus.ASSIGNED;
-    await batch.save();
-
-    await QrCode.updateMany(
-      { batchId: batch._id, redeemed: false },
-      { $set: { campaignId: campaign._id } }
+    const updatedBatch = await qrBatchRepository.assignCampaign(
+      batchId,
+      campaign._id
     );
+    if (!updatedBatch) {
+      throw new NotFoundError('QR batch not found', `assignCampaign: batchId=${batchId}`);
+    }
 
-    return sanitizeBatch(batch);
+    await qrCodeRepository.updateCampaignForUnredeemed(batchId, campaign._id);
+
+    return sanitizeBatch(updatedBatch);
   }
 
   async getBatchStats(id: string) {
-    const batch = await QrBatch.findById(id);
+    const batch = await qrBatchRepository.findById(id);
     if (!batch) {
       throw new NotFoundError('QR batch not found', `getBatchStats: id=${id}`);
     }
 
-    const [total, redeemed, unredeemed] = await Promise.all([
-      QrCode.countDocuments({ batchId: batch._id }),
-      QrCode.countDocuments({ batchId: batch._id, redeemed: true }),
-      QrCode.countDocuments({ batchId: batch._id, redeemed: false }),
-    ]);
+    const { total, redeemed, unredeemed } =
+      await qrCodeRepository.getBatchStats(batch._id);
 
     return {
       batch: sanitizeBatch(batch),
@@ -185,20 +196,9 @@ export class QrBatchService {
   async listCodes(
     page = 1,
     limit = 20,
-    filters: { batchId?: string; redeemed?: boolean } = {}
+    filters: QrCodeListFilters = {}
   ) {
-    const query: {
-      batchId?: string;
-      redeemed?: boolean;
-    } = {};
-    if (filters.batchId) query.batchId = filters.batchId;
-    if (filters.redeemed !== undefined) query.redeemed = filters.redeemed;
-
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      QrCode.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      QrCode.countDocuments(query),
-    ]);
+    const { items, total } = await qrCodeRepository.findAll(page, limit, filters);
 
     return {
       items: items.map((q) => ({

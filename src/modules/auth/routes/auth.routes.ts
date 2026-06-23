@@ -7,7 +7,7 @@ import {
   requireBearerToken,
   requireRoles,
 } from '../middleware/auth.middleware';
-import { UserRole } from '../models/user.model';
+import { UserRole } from '../types/user.types';
 import {
   createUserSchema,
   forgotPasswordSchema,

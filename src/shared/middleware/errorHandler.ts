@@ -60,6 +60,30 @@ export function errorHandler(
     return;
   }
 
+  if (
+    err !== null &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code: string }).code === '23505'
+  ) {
+    res.status(409).json(
+      buildErrorBody('Record already exists', 'CONFLICT')
+    );
+    return;
+  }
+
+  if (
+    err !== null &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code: string }).code === '23503'
+  ) {
+    res.status(404).json(
+      buildErrorBody('Referenced record not found', 'NOT_FOUND')
+    );
+    return;
+  }
+
   const isDev = env.NODE_ENV === 'development';
   const devMessage =
     err instanceof Error

@@ -1,21 +1,13 @@
-import { ClientSession, Types } from 'mongoose';
-import { optionalSessionOptions } from '../../../database/transactions';
-import { NotFoundError } from '../../../shared/utils/errors';
-import { User } from '../../auth/models/user.model';
+import { PoolClient } from 'pg';
+import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
+import { userRepository } from '../../auth/repositories/user.repository';
+import { rewardTransactionRepository } from '../repositories/reward-transaction.repository';
 import {
-  RewardTransaction,
+  IRewardTransaction,
   RewardTransactionType,
-} from '../models/reward-transaction.model';
+} from '../types/rewards.types';
 
-function sanitizeTransaction(tx: {
-  _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  points: number;
-  type: RewardTransactionType;
-  referenceId?: Types.ObjectId;
-  description?: string;
-  createdAt: Date;
-}) {
+function sanitizeTransaction(tx: IRewardTransaction) {
   return {
     id: tx._id,
     userId: tx.userId,
@@ -29,7 +21,7 @@ function sanitizeTransaction(tx: {
 
 export class RewardsService {
   async getBalance(userId: string) {
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User not found', `getBalance: userId=${userId}`);
     }
@@ -37,15 +29,11 @@ export class RewardsService {
   }
 
   async getTransactions(userId: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      RewardTransaction.find({ userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      RewardTransaction.countDocuments({ userId }),
-    ]);
+    const { items, total } = await rewardTransactionRepository.findByUserId(
+      userId,
+      page,
+      limit
+    );
 
     return {
       items: items.map(sanitizeTransaction),
@@ -57,36 +45,64 @@ export class RewardsService {
   }
 
   async creditInSession(
-    userId: Types.ObjectId,
+    userId: string,
     points: number,
-    referenceId: Types.ObjectId,
+    referenceId: string,
     description: string,
-    session?: ClientSession
+    client?: PoolClient
   ) {
-    await User.findByIdAndUpdate(
-      userId,
-      { $inc: { rewardPoints: points } },
-      optionalSessionOptions(session)
+    await userRepository.updateWalletAndPoints(userId, 0, points, client);
+
+    const tx = await rewardTransactionRepository.create(
+      {
+        userId,
+        points,
+        type: RewardTransactionType.CREDIT,
+        referenceId,
+        description,
+      },
+      client
     );
 
-    const [tx] = await RewardTransaction.create(
-      [
-        {
-          userId,
-          points,
-          type: RewardTransactionType.CREDIT,
-          referenceId,
-          description,
-        },
-      ],
-      optionalSessionOptions(session)
+    return tx;
+  }
+
+  async debitInSession(
+    userId: string,
+    points: number,
+    referenceId: string,
+    description: string,
+    client?: PoolClient
+  ) {
+    const user = await userRepository.findById(userId, { client });
+    if (!user) {
+      throw new NotFoundError('User not found', `debitInSession: userId=${userId}`);
+    }
+    if (user.rewardPoints < points) {
+      throw new BadRequestError(
+        'Insufficient reward points',
+        `debitInSession: points=${user.rewardPoints}, amount=${points}`
+      );
+    }
+
+    await userRepository.updateWalletAndPoints(userId, 0, -points, client);
+
+    const tx = await rewardTransactionRepository.create(
+      {
+        userId,
+        points,
+        type: RewardTransactionType.DEBIT,
+        referenceId,
+        description,
+      },
+      client
     );
 
     return tx;
   }
 
   async getUserRewardsAdmin(userId: string) {
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User not found', `getUserRewardsAdmin: userId=${userId}`);
     }

@@ -1,7 +1,8 @@
 import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
 import { PayoutMethod } from '../constants/withdrawal.constants';
-import { IPayoutProfile } from '../models/payout-profile.model';
+import { payoutProfileRepository } from '../repositories/payout-profile.repository';
+import { IPayoutProfile } from '../types/withdrawal.types';
 import { PayoutResult } from '../types/withdrawal.types';
 import { PayoutProvider } from './payout-provider.types';
 
@@ -49,27 +50,30 @@ async function razorpayRequest<T>(
 
 export class RazorpayPayoutService implements PayoutProvider {
   async ensureFundAccount(profile: IPayoutProfile): Promise<IPayoutProfile> {
-    if (!profile.providerContactId) {
+    let providerContactId = profile.providerContactId;
+    let providerFundAccountId = profile.providerFundAccountId;
+
+    if (!providerContactId) {
       const contact = await razorpayRequest<RazorpayEntity>('/contacts', 'POST', {
         name: profile.accountHolderName,
         email: `${profile.userId}@payout.local`,
         contact: '9999999999',
         type: 'customer',
-        reference_id: profile.userId.toString(),
+        reference_id: profile.userId,
       });
-      profile.providerContactId = contact.id;
+      providerContactId = contact.id;
     }
 
-    if (!profile.providerFundAccountId) {
+    if (!providerFundAccountId) {
       const fundAccountBody =
         profile.method === PayoutMethod.UPI
           ? {
-              contact_id: profile.providerContactId,
+              contact_id: providerContactId,
               account_type: 'vpa',
               vpa: { address: profile.upiId },
             }
           : {
-              contact_id: profile.providerContactId,
+              contact_id: providerContactId,
               account_type: 'bank_account',
               bank_account: {
                 name: profile.accountHolderName,
@@ -83,11 +87,21 @@ export class RazorpayPayoutService implements PayoutProvider {
         'POST',
         fundAccountBody
       );
-      profile.providerFundAccountId = fundAccount.id;
+      providerFundAccountId = fundAccount.id;
     }
 
-    await profile.save();
-    return profile;
+    if (
+      providerContactId === profile.providerContactId &&
+      providerFundAccountId === profile.providerFundAccountId
+    ) {
+      return profile;
+    }
+
+    const updated = await payoutProfileRepository.update(profile._id, {
+      providerContactId,
+      providerFundAccountId,
+    });
+    return updated ?? profile;
   }
 
   async createPayout(

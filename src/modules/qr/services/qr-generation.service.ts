@@ -1,18 +1,7 @@
 import { customAlphabet } from 'nanoid';
-import { Types } from 'mongoose';
 import { env } from '../../../config/env';
-import {
-  getInsertedDocsCount,
-  isMongoDuplicateKeyError,
-} from '../../../shared/utils/mongo';
-import { QrCode } from '../models/qr-code.model';
-import { IQrBatch } from '../models/qr-batch.model';
-
-interface QrCodeInsertDoc {
-  code: string;
-  batchId: Types.ObjectId;
-  campaignId?: Types.ObjectId;
-}
+import { qrCodeRepository } from '../repositories/qr-code.repository';
+import { IQrBatch } from '../types/qr.types';
 
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const generateCode = customAlphabet(ALPHABET, env.QR_CODE_LENGTH);
@@ -30,7 +19,7 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
 
   while (created < remaining) {
     const batchSize = Math.min(chunkSize, remaining - created);
-    const docs: QrCodeInsertDoc[] = [];
+    const docs: Array<{ code: string; batchId: string; campaignId?: string }> = [];
     const codes = new Set<string>();
 
     while (docs.length < batchSize) {
@@ -44,18 +33,9 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
       });
     }
 
-    try {
-      const inserted = await QrCode.insertMany(docs, { ordered: false });
-      created += inserted.length;
-    } catch (err: unknown) {
-      if (isMongoDuplicateKeyError(err)) {
-        const insertedCount = getInsertedDocsCount(err);
-        if (insertedCount > 0) {
-          created += insertedCount;
-        }
-        continue;
-      }
-      throw err;
+    const inserted = await qrCodeRepository.bulkCreate(docs);
+    if (inserted > 0) {
+      created += inserted;
     }
   }
 

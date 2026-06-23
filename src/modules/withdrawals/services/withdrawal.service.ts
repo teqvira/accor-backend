@@ -1,21 +1,22 @@
 import crypto from 'crypto';
-import { Types } from 'mongoose';
 import { env } from '../../../config/env';
-import {
-  optionalSessionOptions,
-  withMongoTransaction,
-} from '../../../database/transactions';
+import { withTransaction } from '../../../database/transactions';
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from '../../../shared/utils/errors';
-import { User } from '../../auth/models/user.model';
+import { userRepository } from '../../auth/repositories/user.repository';
 import { walletService } from '../../wallet/services/wallet.service';
 import { PayoutMethod, WithdrawalStatus } from '../constants/withdrawal.constants';
-import { IPayoutProfile, PayoutProfile } from '../models/payout-profile.model';
-import { IWithdrawal, Withdrawal } from '../models/withdrawal.model';
-import { CreateWithdrawalInput, SavePayoutProfileInput } from '../types/withdrawal.types';
+import { payoutProfileRepository } from '../repositories/payout-profile.repository';
+import { withdrawalRepository } from '../repositories/withdrawal.repository';
+import {
+  CreateWithdrawalInput,
+  IPayoutProfile,
+  IWithdrawal,
+  SavePayoutProfileInput,
+} from '../types/withdrawal.types';
 import { getActivePayoutProvider, getPayoutProvider } from './payout-provider.factory';
 
 function maskAccountNumber(accountNumber?: string): string | undefined {
@@ -61,35 +62,32 @@ function getPayoutDestination(profile: IPayoutProfile): string {
 export class WithdrawalService {
   async savePayoutProfile(userId: string, input: SavePayoutProfileInput) {
     const provider = getActivePayoutProvider();
-    const existing = await PayoutProfile.findOne({ userId })
-      .select('+accountNumber');
 
-    const profile = existing
-      ? existing
-      : new PayoutProfile({
-          userId,
-          provider,
-        });
+    const profileData =
+      input.method === PayoutMethod.UPI
+        ? {
+            userId,
+            method: input.method,
+            accountHolderName: input.accountHolderName,
+            provider,
+            upiId: input.upiId,
+            accountNumber: null,
+            ifsc: null,
+          }
+        : {
+            userId,
+            method: input.method,
+            accountHolderName: input.accountHolderName,
+            provider,
+            upiId: null,
+            accountNumber: input.accountNumber,
+            ifsc: input.ifsc,
+          };
 
-    profile.method = input.method;
-    profile.accountHolderName = input.accountHolderName;
-    profile.provider = provider;
-
-    if (input.method === PayoutMethod.UPI) {
-      profile.upiId = input.upiId;
-      profile.accountNumber = undefined;
-      profile.ifsc = undefined;
-      profile.providerFundAccountId = undefined;
-      profile.cashfreeBeneficiaryId = undefined;
-    } else {
-      profile.accountNumber = input.accountNumber;
-      profile.ifsc = input.ifsc;
-      profile.upiId = undefined;
-      profile.providerFundAccountId = undefined;
-      profile.cashfreeBeneficiaryId = undefined;
-    }
-
-    await profile.save();
+    const profile = await payoutProfileRepository.upsertByUserId(
+      userId,
+      profileData
+    );
 
     const payoutProvider = getPayoutProvider(provider);
     const readyProfile = await payoutProvider.ensureFundAccount(profile);
@@ -98,7 +96,9 @@ export class WithdrawalService {
   }
 
   async getPayoutProfile(userId: string) {
-    const profile = await PayoutProfile.findOne({ userId }).select('+accountNumber');
+    const profile = await payoutProfileRepository.findByUserId(userId, {
+      includeAccountNumber: true,
+    });
     if (!profile) {
       throw new NotFoundError(
         'Payout profile not found',
@@ -109,11 +109,11 @@ export class WithdrawalService {
   }
 
   async listWithdrawals(userId: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      Withdrawal.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Withdrawal.countDocuments({ userId }),
-    ]);
+    const { items, total } = await withdrawalRepository.findByUserId(
+      userId,
+      page,
+      limit
+    );
 
     return {
       items: items.map(sanitizeWithdrawal),
@@ -132,7 +132,9 @@ export class WithdrawalService {
       );
     }
 
-    const profile = await PayoutProfile.findOne({ userId }).select('+accountNumber');
+    const profile = await payoutProfileRepository.findByUserId(userId, {
+      includeAccountNumber: true,
+    });
     if (!profile) {
       throw new BadRequestError(
         'Please add your bank or UPI details before withdrawing',
@@ -140,10 +142,7 @@ export class WithdrawalService {
       );
     }
 
-    const pending = await Withdrawal.findOne({
-      userId,
-      status: { $in: [WithdrawalStatus.PENDING, WithdrawalStatus.PROCESSING] },
-    });
+    const pending = await withdrawalRepository.findPendingByUserId(userId);
     if (pending) {
       throw new ConflictError(
         'You already have a withdrawal in progress',
@@ -153,10 +152,8 @@ export class WithdrawalService {
 
     const referenceId = `wd_${crypto.randomUUID()}`;
 
-    const withdrawal = await withMongoTransaction(async (session) => {
-      const user = session
-        ? await User.findById(userId).session(session)
-        : await User.findById(userId);
+    const withdrawal = await withTransaction(async (client) => {
+      const user = await userRepository.findById(userId, { client });
       if (!user) {
         throw new NotFoundError('User not found', `requestWithdrawal: userId=${userId}`);
       }
@@ -167,27 +164,25 @@ export class WithdrawalService {
         );
       }
 
-      const [createdWithdrawal] = await Withdrawal.create(
-        [
-          {
-            userId,
-            amount: input.amount,
-            method: profile.method,
-            status: WithdrawalStatus.PENDING,
-            provider: profile.provider,
-            providerReferenceId: referenceId,
-            payoutDestination: getPayoutDestination(profile),
-          },
-        ],
-        optionalSessionOptions(session)
+      const createdWithdrawal = await withdrawalRepository.create(
+        {
+          userId,
+          amount: input.amount,
+          method: profile.method,
+          status: WithdrawalStatus.PENDING,
+          provider: profile.provider,
+          providerReferenceId: referenceId,
+          payoutDestination: getPayoutDestination(profile),
+        },
+        client
       );
 
       await walletService.debitInSession(
-        new Types.ObjectId(userId),
+        userId,
         input.amount,
         createdWithdrawal._id,
         `Wallet withdrawal ${referenceId}`,
-        session
+        client
       );
 
       return createdWithdrawal;
@@ -201,14 +196,25 @@ export class WithdrawalService {
         referenceId
       );
 
-      withdrawal.providerPayoutId = payout.providerPayoutId;
-      withdrawal.status =
-        payout.status === 'success'
-          ? WithdrawalStatus.SUCCESS
-          : WithdrawalStatus.PROCESSING;
-      await withdrawal.save();
+      const updatedWithdrawal = await withdrawalRepository.updateProviderDetails(
+        withdrawal._id,
+        {
+          providerPayoutId: payout.providerPayoutId,
+          status:
+            payout.status === 'success'
+              ? WithdrawalStatus.SUCCESS
+              : WithdrawalStatus.PROCESSING,
+        }
+      );
 
-      return sanitizeWithdrawal(withdrawal);
+      if (!updatedWithdrawal) {
+        throw new NotFoundError(
+          'Withdrawal not found',
+          `requestWithdrawal: withdrawalId=${withdrawal._id}`
+        );
+      }
+
+      return sanitizeWithdrawal(updatedWithdrawal);
     } catch (error) {
       await this.refundFailedWithdrawal(
         withdrawal,
@@ -219,10 +225,8 @@ export class WithdrawalService {
   }
 
   async refundFailedWithdrawal(withdrawal: IWithdrawal, reason: string) {
-    await withMongoTransaction(async (session) => {
-      const current = session
-        ? await Withdrawal.findById(withdrawal._id).session(session)
-        : await Withdrawal.findById(withdrawal._id);
+    await withTransaction(async (client) => {
+      const current = await withdrawalRepository.findById(withdrawal._id, client);
       if (
         !current ||
         current.status === WithdrawalStatus.SUCCESS ||
@@ -231,16 +235,19 @@ export class WithdrawalService {
         return;
       }
 
-      current.status = WithdrawalStatus.FAILED;
-      current.failureReason = reason;
-      await current.save(optionalSessionOptions(session));
+      await withdrawalRepository.updateFailure(
+        current._id,
+        WithdrawalStatus.FAILED,
+        reason,
+        client
+      );
 
       await walletService.creditInSession(
         current.userId,
         current.amount,
         current._id,
         `Withdrawal refund ${current.providerReferenceId}`,
-        session
+        client
       );
     });
   }
@@ -268,12 +275,15 @@ export class WithdrawalService {
         : undefined;
     if (!referenceId) return;
 
-    const withdrawal = await Withdrawal.findOne({ providerReferenceId: referenceId });
+    const withdrawal =
+      await withdrawalRepository.findByProviderReferenceId(referenceId);
     if (!withdrawal) return;
 
     if (event === 'payout.processed') {
-      withdrawal.status = WithdrawalStatus.SUCCESS;
-      await withdrawal.save();
+      await withdrawalRepository.updateStatus(
+        withdrawal._id,
+        WithdrawalStatus.SUCCESS
+      );
       return;
     }
 
@@ -294,14 +304,15 @@ export class WithdrawalService {
 
     if (!transferId) return;
 
-    const withdrawal = await Withdrawal.findOne({
-      $or: [{ providerReferenceId: transferId }, { providerPayoutId: transferId }],
-    });
+    const withdrawal =
+      await withdrawalRepository.findByProviderReferenceOrPayoutId(transferId);
     if (!withdrawal) return;
 
     if (status === 'SUCCESS') {
-      withdrawal.status = WithdrawalStatus.SUCCESS;
-      await withdrawal.save();
+      await withdrawalRepository.updateStatus(
+        withdrawal._id,
+        WithdrawalStatus.SUCCESS
+      );
       return;
     }
 

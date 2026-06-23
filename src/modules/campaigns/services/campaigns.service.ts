@@ -1,6 +1,10 @@
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
-import { Campaign, ICampaign } from '../models/campaign.model';
-import { CreateCampaignInput, UpdateCampaignInput } from '../types/campaigns.types';
+import { campaignRepository } from '../repositories/campaign.repository';
+import {
+  CreateCampaignInput,
+  ICampaign,
+  UpdateCampaignInput,
+} from '../types/campaigns.types';
 
 function sanitizeCampaign(campaign: ICampaign) {
   return {
@@ -18,7 +22,7 @@ function sanitizeCampaign(campaign: ICampaign) {
 
 export class CampaignsService {
   async create(input: CreateCampaignInput) {
-    const campaign = await Campaign.create({
+    const campaign = await campaignRepository.create({
       name: input.name,
       walletAmount: input.walletAmount,
       rewardPoints: input.rewardPoints,
@@ -30,11 +34,7 @@ export class CampaignsService {
   }
 
   async list(page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      Campaign.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Campaign.countDocuments(),
-    ]);
+    const { items, total } = await campaignRepository.findAll(page, limit);
     return {
       items: items.map(sanitizeCampaign),
       total,
@@ -45,7 +45,7 @@ export class CampaignsService {
   }
 
   async getById(id: string) {
-    const campaign = await Campaign.findById(id);
+    const campaign = await campaignRepository.findById(id);
     if (!campaign) {
       throw new NotFoundError('Campaign not found', `getById: id=${id}`);
     }
@@ -53,50 +53,63 @@ export class CampaignsService {
   }
 
   async update(id: string, input: UpdateCampaignInput) {
-    const campaign = await Campaign.findById(id);
+    const campaign = await campaignRepository.findById(id);
     if (!campaign) {
       throw new NotFoundError('Campaign not found', `update: id=${id}`);
     }
 
-    if (input.name !== undefined) campaign.name = input.name;
-    if (input.walletAmount !== undefined) campaign.walletAmount = input.walletAmount;
-    if (input.rewardPoints !== undefined) campaign.rewardPoints = input.rewardPoints;
-    if (input.startDate !== undefined) campaign.startDate = new Date(input.startDate);
-    if (input.endDate !== undefined) campaign.endDate = new Date(input.endDate);
+    const name = input.name !== undefined ? input.name : campaign.name;
+    const walletAmount =
+      input.walletAmount !== undefined ? input.walletAmount : campaign.walletAmount;
+    const rewardPoints =
+      input.rewardPoints !== undefined ? input.rewardPoints : campaign.rewardPoints;
+    const startDate =
+      input.startDate !== undefined
+        ? new Date(input.startDate)
+        : campaign.startDate;
+    const endDate =
+      input.endDate !== undefined ? new Date(input.endDate) : campaign.endDate;
 
-    if (campaign.endDate < campaign.startDate) {
+    if (endDate < startDate) {
       throw new BadRequestError(
         'End date must be on or after start date',
         `update: invalid date range id=${id}`
       );
     }
 
-    await campaign.save();
-    return sanitizeCampaign(campaign);
+    const updated = await campaignRepository.update(id, {
+      name,
+      walletAmount,
+      rewardPoints,
+      startDate,
+      endDate,
+    });
+
+    if (!updated) {
+      throw new NotFoundError('Campaign not found', `update: id=${id}`);
+    }
+
+    return sanitizeCampaign(updated);
   }
 
   async activate(id: string) {
-    const campaign = await Campaign.findById(id);
+    const campaign = await campaignRepository.setActive(id, true);
     if (!campaign) {
       throw new NotFoundError('Campaign not found', `activate: id=${id}`);
     }
-    campaign.active = true;
-    await campaign.save();
     return sanitizeCampaign(campaign);
   }
 
   async deactivate(id: string) {
-    const campaign = await Campaign.findById(id);
+    const campaign = await campaignRepository.setActive(id, false);
     if (!campaign) {
       throw new NotFoundError('Campaign not found', `deactivate: id=${id}`);
     }
-    campaign.active = false;
-    await campaign.save();
     return sanitizeCampaign(campaign);
   }
 
   async getActiveCampaignById(id: string) {
-    const campaign = await Campaign.findById(id);
+    const campaign = await campaignRepository.findById(id);
     if (!campaign) {
       throw new NotFoundError('Campaign not found', `getActiveCampaignById: id=${id}`);
     }

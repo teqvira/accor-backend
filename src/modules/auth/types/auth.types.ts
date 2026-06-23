@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { UserRole } from '../models/user.model';
+import { UserRole } from './user.types';
 
 export interface JwtAccessPayload {
   sub: string;

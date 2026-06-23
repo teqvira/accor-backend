@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { Types } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { env } from '../../../config/env';
 import {
   BadRequestError,
@@ -9,10 +9,11 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../../../shared/utils/errors';
-import { isMongoDuplicateKeyError } from '../../../shared/utils/mongo';
+import { isPgUniqueViolation } from '../../../shared/utils/postgres';
+import { refreshTokenRepository } from '../repositories/refresh-token.repository';
+import { userRepository } from '../repositories/user.repository';
 import { JwtAccessPayload } from '../types/auth.types';
-import { RefreshToken } from '../models/refresh-token.model';
-import { IUser, User, UserRole } from '../models/user.model';
+import { IUser, UserRole } from '../types/user.types';
 import { sendOtpEmail } from './email.service';
 import { sendOtpSms } from './sms.service';
 import {
@@ -56,22 +57,22 @@ async function hashRefreshToken(token: string): Promise<string> {
 }
 
 async function issueTokenPair(user: IUser) {
-  const tokenId = new Types.ObjectId().toString();
+  const tokenId = uuidv4();
   const accessToken = signAccessToken({
-    sub: user._id.toString(),
+    sub: user._id,
     email: user.email,
     mobileNumber: user.mobileNumber,
     role: user.role,
   });
   const refreshToken = signRefreshToken({
-    sub: user._id.toString(),
+    sub: user._id,
     tokenId,
   });
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  await RefreshToken.create({
+  await refreshTokenRepository.create({
     userId: user._id,
     tokenHash: await hashRefreshToken(refreshToken),
     expiresAt,
@@ -80,13 +81,13 @@ async function issueTokenPair(user: IUser) {
   return { accessToken, refreshToken };
 }
 
-async function setUserOtp(user: IUser, otp: string): Promise<void> {
-  user.otpHash = hashOtp(otp);
-  user.otpExpiresAt = new Date(
+async function setUserOtp(userId: string, otp: string): Promise<void> {
+  const otpHash = hashOtp(otp);
+  const otpExpiresAt = new Date(
     Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000
   );
-  user.otpLastSentAt = new Date();
-  await user.save();
+  const otpLastSentAt = new Date();
+  await userRepository.updateOtp(userId, otpHash, otpExpiresAt, otpLastSentAt);
 }
 
 function assertOtpResendAllowed(user: IUser): void {
@@ -119,7 +120,7 @@ export class AuthService {
       );
     }
 
-    const existing = await User.findOne({ email: input.email });
+    const existing = await userRepository.findByEmail(input.email);
     if (existing) {
       throw new ConflictError(
         'An account with this email already exists',
@@ -128,7 +129,7 @@ export class AuthService {
     }
 
     const hashed = await bcrypt.hash(input.password, 12);
-    const user = await User.create({
+    const user = await userRepository.create({
       name: input.name,
       email: input.email,
       password: hashed,
@@ -140,7 +141,7 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await User.findOne({ email }).select('+password');
+    const user = await userRepository.findByEmail(email, { includePassword: true });
     if (!user) {
       throw new UnauthorizedError(
         'Invalid email or password',
@@ -183,7 +184,7 @@ export class AuthService {
   ): Promise<void> {
     if (!loggedInUserId) return;
 
-    const loggedInUser = await User.findById(loggedInUserId);
+    const loggedInUser = await userRepository.findById(loggedInUserId);
     if (
       loggedInUser?.mobileNumber &&
       loggedInUser.mobileNumber !== mobileNumber
@@ -197,27 +198,30 @@ export class AuthService {
 
   async sendMobileOtp(mobileNumber: string, loggedInUserId?: string) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    let user = await User.findOne({ mobileNumber }).select(
-      '+otpHash +otpExpiresAt +otpLastSentAt'
-    );
+    let user = await userRepository.findByMobile(mobileNumber, {
+      includeOtp: true,
+    });
 
     if (!user) {
       try {
-        const created = await User.create({
+        const created = await userRepository.create({
           mobileNumber,
           role: UserRole.USER,
           name: `User ${mobileNumber.slice(-4)}`,
         });
-        user = await User.findById(created._id).select(
-          '+otpHash +otpExpiresAt +otpLastSentAt'
-        );
+        user = await userRepository.findByMobile(mobileNumber, {
+          includeOtp: true,
+        });
+        if (!user) {
+          user = created;
+        }
       } catch (err: unknown) {
-        if (!isMongoDuplicateKeyError(err)) {
+        if (!isPgUniqueViolation(err)) {
           throw err;
         }
-        user = await User.findOne({ mobileNumber }).select(
-          '+otpHash +otpExpiresAt +otpLastSentAt'
-        );
+        user = await userRepository.findByMobile(mobileNumber, {
+          includeOtp: true,
+        });
       }
     }
 
@@ -238,7 +242,7 @@ export class AuthService {
     assertOtpResendAllowed(user);
 
     const otp = generateOtp();
-    await setUserOtp(user, otp);
+    await setUserOtp(user._id, otp);
     await sendOtpSms(mobileNumber, otp);
 
     return { message: 'OTP sent successfully' };
@@ -254,9 +258,9 @@ export class AuthService {
     loggedInUserId?: string
   ) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    const user = await User.findOne({ mobileNumber }).select(
-      '+otpHash +otpExpiresAt'
-    );
+    const user = await userRepository.findByMobile(mobileNumber, {
+      includeOtp: true,
+    });
 
     if (!user?.otpHash || !user.otpExpiresAt) {
       throw new BadRequestError(
@@ -279,14 +283,17 @@ export class AuthService {
       );
     }
 
-    user.otpHash = undefined;
-    user.otpExpiresAt = undefined;
-    user.isVerified = true;
-    await user.save();
+    const verifiedUser = await userRepository.clearOtpAndVerify(user._id);
+    if (!verifiedUser) {
+      throw new BadRequestError(
+        'Unable to process request',
+        `verifyMobileOtp: user not found userId=${user._id}`
+      );
+    }
 
-    const tokens = await issueTokenPair(user);
+    const tokens = await issueTokenPair(verifiedUser);
     return {
-      user: sanitizeUser(user),
+      user: sanitizeUser(verifiedUser),
       ...tokens,
     };
   }
@@ -304,10 +311,10 @@ export class AuthService {
     }
 
     const tokenHash = await hashRefreshToken(refreshToken);
-    const stored = await RefreshToken.findOne({
-      userId: payload.sub,
-      tokenHash,
-    });
+    const stored = await refreshTokenRepository.findByUserAndHash(
+      payload.sub,
+      tokenHash
+    );
 
     if (!stored) {
       throw new UnauthorizedError(
@@ -323,9 +330,9 @@ export class AuthService {
       );
     }
 
-    await RefreshToken.deleteOne({ _id: stored._id });
+    await refreshTokenRepository.deleteById(stored._id);
 
-    const user = await User.findById(payload.sub);
+    const user = await userRepository.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedError(
         'Your session is invalid. Please log in again',
@@ -347,20 +354,20 @@ export class AuthService {
     try {
       const payload = verifyRefreshToken(refreshToken);
       const tokenHash = await hashRefreshToken(refreshToken);
-      await RefreshToken.deleteOne({ userId: payload.sub, tokenHash });
+      await refreshTokenRepository.deleteByUserAndHash(payload.sub, tokenHash);
     } catch {
       // ignore invalid tokens on logout
     }
   }
 
   async forgotPassword(email: string) {
-    const user = await User.findOne({ email });
+    const user = await userRepository.findByEmail(email);
     if (!user) {
       return { message: 'If the email exists, an OTP has been sent' };
     }
 
     const otp = generateOtp();
-    await setUserOtp(user, otp);
+    await setUserOtp(user._id, otp);
     if (user.email) {
       await sendOtpEmail(user.email, otp);
     }
@@ -369,9 +376,7 @@ export class AuthService {
   }
 
   async verifyPasswordOtp(email: string, otp: string) {
-    const user = await User.findOne({ email }).select(
-      '+otpHash +otpExpiresAt'
-    );
+    const user = await userRepository.findByEmail(email, { includeOtp: true });
 
     if (!user?.otpHash || !user.otpExpiresAt) {
       throw new BadRequestError(
@@ -394,12 +399,10 @@ export class AuthService {
       );
     }
 
-    user.otpHash = undefined;
-    user.otpExpiresAt = undefined;
-    await user.save();
+    await userRepository.clearOtp(user._id);
 
     const resetToken = signResetToken({
-      sub: user._id.toString(),
+      sub: user._id,
       purpose: 'password-reset',
     });
 
@@ -418,7 +421,7 @@ export class AuthService {
       );
     }
 
-    const user = await User.findById(payload.sub);
+    const user = await userRepository.findById(payload.sub);
     if (!user) {
       throw new NotFoundError(
         'Account not found',
@@ -426,9 +429,9 @@ export class AuthService {
       );
     }
 
-    user.password = await bcrypt.hash(newPassword, 12);
-    await user.save();
-    await RefreshToken.deleteMany({ userId: user._id });
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await userRepository.updatePassword(user._id, hashed);
+    await refreshTokenRepository.deleteManyByUserId(user._id);
 
     return { message: 'Password reset successfully' };
   }
@@ -438,7 +441,7 @@ export class AuthService {
     currentPassword: string,
     newPassword: string
   ) {
-    const user = await User.findById(userId).select('+password');
+    const user = await userRepository.findById(userId, { includePassword: true });
     if (!user) {
       throw new NotFoundError(
         'Account not found',
@@ -454,9 +457,9 @@ export class AuthService {
       );
     }
 
-    user.password = await bcrypt.hash(newPassword, 12);
-    await user.save();
-    await RefreshToken.deleteMany({ userId: user._id });
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await userRepository.updatePassword(user._id, hashed);
+    await refreshTokenRepository.deleteManyByUserId(user._id);
 
     return { message: 'Password updated successfully' };
   }

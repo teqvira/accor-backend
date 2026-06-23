@@ -1,21 +1,13 @@
-import { ClientSession, Types } from 'mongoose';
-import { optionalSessionOptions } from '../../../database/transactions';
+import { PoolClient } from 'pg';
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
-import { User } from '../../auth/models/user.model';
+import { userRepository } from '../../auth/repositories/user.repository';
+import { walletTransactionRepository } from '../repositories/wallet-transaction.repository';
 import {
-  WalletTransaction,
+  IWalletTransaction,
   WalletTransactionType,
-} from '../models/wallet-transaction.model';
+} from '../types/wallet.types';
 
-function sanitizeTransaction(tx: {
-  _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  amount: number;
-  type: WalletTransactionType;
-  referenceId?: Types.ObjectId;
-  description?: string;
-  createdAt: Date;
-}) {
+function sanitizeTransaction(tx: IWalletTransaction) {
   return {
     id: tx._id,
     userId: tx.userId,
@@ -29,7 +21,7 @@ function sanitizeTransaction(tx: {
 
 export class WalletService {
   async getBalance(userId: string) {
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User not found', `getBalance: userId=${userId}`);
     }
@@ -37,15 +29,11 @@ export class WalletService {
   }
 
   async getTransactions(userId: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      WalletTransaction.find({ userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      WalletTransaction.countDocuments({ userId }),
-    ]);
+    const { items, total } = await walletTransactionRepository.findByUserId(
+      userId,
+      page,
+      limit
+    );
 
     return {
       items: items.map(sanitizeTransaction),
@@ -57,15 +45,13 @@ export class WalletService {
   }
 
   async debitInSession(
-    userId: Types.ObjectId,
+    userId: string,
     amount: number,
-    referenceId: Types.ObjectId,
+    referenceId: string,
     description: string,
-    session?: ClientSession
+    client?: PoolClient
   ) {
-    const user = session
-      ? await User.findById(userId).session(session)
-      : await User.findById(userId);
+    const user = await userRepository.findById(userId, { client });
     if (!user) {
       throw new NotFoundError('User not found', `debitInSession: userId=${userId}`);
     }
@@ -76,56 +62,47 @@ export class WalletService {
       );
     }
 
-    user.walletBalance -= amount;
-    await user.save(optionalSessionOptions(session));
+    await userRepository.updateWalletAndPoints(userId, -amount, 0, client);
 
-    const [tx] = await WalletTransaction.create(
-      [
-        {
-          userId,
-          amount,
-          type: WalletTransactionType.DEBIT,
-          referenceId,
-          description,
-        },
-      ],
-      optionalSessionOptions(session)
+    const tx = await walletTransactionRepository.create(
+      {
+        userId,
+        amount,
+        type: WalletTransactionType.DEBIT,
+        referenceId,
+        description,
+      },
+      client
     );
 
     return tx;
   }
 
   async creditInSession(
-    userId: Types.ObjectId,
+    userId: string,
     amount: number,
-    referenceId: Types.ObjectId,
+    referenceId: string,
     description: string,
-    session?: ClientSession
+    client?: PoolClient
   ) {
-    await User.findByIdAndUpdate(
-      userId,
-      { $inc: { walletBalance: amount } },
-      optionalSessionOptions(session)
-    );
+    await userRepository.updateWalletAndPoints(userId, amount, 0, client);
 
-    const [tx] = await WalletTransaction.create(
-      [
-        {
-          userId,
-          amount,
-          type: WalletTransactionType.CREDIT,
-          referenceId,
-          description,
-        },
-      ],
-      optionalSessionOptions(session)
+    const tx = await walletTransactionRepository.create(
+      {
+        userId,
+        amount,
+        type: WalletTransactionType.CREDIT,
+        referenceId,
+        description,
+      },
+      client
     );
 
     return tx;
   }
 
   async getUserWalletAdmin(userId: string) {
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User not found', `getUserWalletAdmin: userId=${userId}`);
     }
