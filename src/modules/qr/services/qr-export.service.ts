@@ -1,9 +1,4 @@
-import type { Archiver } from 'archiver';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const createArchive = require('archiver') as (
-  format: string,
-  options?: { zlib?: { level?: number } }
-) => Archiver;
+import { ZipArchive } from 'archiver';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { Response } from 'express';
@@ -22,7 +17,7 @@ async function streamZipExport(
     `attachment; filename="${batchName.replace(/\s+/g, '_')}_qrs.zip"`
   );
 
-  const archive = createArchive('zip', { zlib: { level: 5 } });
+  const archive = new ZipArchive({ zlib: { level: 5 } });
   archive.pipe(res);
 
   for (const code of codes) {
