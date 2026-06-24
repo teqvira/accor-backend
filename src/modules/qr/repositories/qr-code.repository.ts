@@ -6,6 +6,7 @@ interface QrCodeRow {
   id: string;
   code: string;
   batch_id: string;
+  product_id: string | null;
   campaign_id: string | null;
   redeemed: boolean;
   redeemed_by: string | null;
@@ -19,6 +20,7 @@ export function mapQrCodeRow(row: QrCodeRow): IQrCode {
     _id: row.id,
     code: row.code,
     batchId: row.batch_id,
+    productId: row.product_id ?? undefined,
     campaignId: row.campaign_id ?? undefined,
     redeemed: row.redeemed,
     redeemedBy: row.redeemed_by ?? undefined,
@@ -29,7 +31,7 @@ export function mapQrCodeRow(row: QrCodeRow): IQrCode {
 }
 
 const CODE_COLUMNS = `
-  id, code, batch_id, campaign_id, redeemed, redeemed_by, redeemed_at,
+  id, code, batch_id, product_id, campaign_id, redeemed, redeemed_by, redeemed_at,
   created_at, updated_at
 `;
 
@@ -38,16 +40,17 @@ type Queryable = Pick<PoolClient, 'query'>;
 export interface QrCodeInsertDoc {
   code: string;
   batchId: string;
+  productId?: string;
   campaignId?: string;
 }
 
 export const qrCodeRepository = {
   create: async (data: QrCodeInsertDoc): Promise<IQrCode> => {
     const result = await pool.query<QrCodeRow>(
-      `INSERT INTO qr_codes (code, batch_id, campaign_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO qr_codes (code, batch_id, product_id, campaign_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING ${CODE_COLUMNS}`,
-      [data.code, data.batchId, data.campaignId ?? null]
+      [data.code, data.batchId, data.productId ?? null, data.campaignId ?? null]
     );
     return mapQrCodeRow(result.rows[0]);
   },
@@ -61,13 +64,18 @@ export const qrCodeRepository = {
 
     for (const doc of docs) {
       placeholders.push(
-        `($${paramIndex++}, $${paramIndex++}, $${paramIndex++})`
+        `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`
       );
-      values.push(doc.code, doc.batchId, doc.campaignId ?? null);
+      values.push(
+        doc.code,
+        doc.batchId,
+        doc.productId ?? null,
+        doc.campaignId ?? null
+      );
     }
 
     const result = await pool.query<{ id: string }>(
-      `INSERT INTO qr_codes (code, batch_id, campaign_id)
+      `INSERT INTO qr_codes (code, batch_id, product_id, campaign_id)
        VALUES ${placeholders.join(', ')}
        ON CONFLICT (code) DO NOTHING
        RETURNING id`,

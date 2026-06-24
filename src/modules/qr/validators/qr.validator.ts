@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
 export const createBatchSchema = z.object({
-  name: z.string().min(2).max(200),
+  name: z.string().min(2).max(200).optional(),
+  productId: z.string().min(1, 'Product is required'),
+  campaignId: z.string().min(1).optional(),
+  description: z.string().trim().max(5000).optional(),
   totalQrs: z.coerce.number().int().min(1).max(500000),
-  campaignId: z.string().min(1),
 });
 
 export const assignCampaignSchema = z.object({

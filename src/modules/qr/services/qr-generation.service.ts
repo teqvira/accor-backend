@@ -19,7 +19,12 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
 
   while (created < remaining) {
     const batchSize = Math.min(chunkSize, remaining - created);
-    const docs: Array<{ code: string; batchId: string; campaignId?: string }> = [];
+    const docs: Array<{
+      code: string;
+      batchId: string;
+      productId?: string;
+      campaignId?: string;
+    }> = [];
     const codes = new Set<string>();
 
     while (docs.length < batchSize) {
@@ -29,6 +34,7 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
       docs.push({
         code,
         batchId: batch._id,
+        ...(batch.productId ? { productId: batch.productId } : {}),
         ...(batch.campaignId ? { campaignId: batch.campaignId } : {}),
       });
     }

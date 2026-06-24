@@ -7,6 +7,7 @@ import { qrRoutes } from '../modules/qr';
 import { redemptionRoutes } from '../modules/redemption';
 import { rewardsRoutes } from '../modules/rewards';
 import { transactionsRoutes } from '../modules/transactions';
+import { productsRoutes } from '../modules/products';
 import { payoutWebhookRoutes, withdrawalRoutes } from '../modules/withdrawals';
 import { walletRoutes } from '../modules/wallet';
 
@@ -57,6 +58,7 @@ const uploadLimiter = rateLimit({
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/campaigns', campaignsRoutes);
+  app.use('/api/products', productsRoutes);
   app.use('/api/qr', qrRoutes);
   app.use('/api/wallet', walletRoutes);
   app.use('/api/wallet', withdrawLimiter, withdrawalRoutes);

@@ -9,16 +9,25 @@ export interface IQrBatch {
   name: string;
   totalQrs: number;
   generatedCount: number;
+  productId?: string;
   campaignId?: string;
+  description?: string;
   status: QrBatchStatus;
   createdAt: Date;
   updatedAt: Date;
+  product?: {
+    id: string;
+    skuCode: string;
+    name: string;
+    imageUrl?: string;
+  };
 }
 
 export interface IQrCode {
   _id: string;
   code: string;
   batchId: string;
+  productId?: string;
   campaignId?: string;
   redeemed: boolean;
   redeemedBy?: string;
@@ -28,9 +37,11 @@ export interface IQrCode {
 }
 
 export interface CreateBatchInput {
-  name: string;
+  name?: string;
+  productId: string;
+  campaignId?: string;
+  description?: string;
   totalQrs: number;
-  campaignId: string;
 }
 
 export interface AssignCampaignInput {

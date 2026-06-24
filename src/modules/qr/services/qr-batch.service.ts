@@ -2,6 +2,8 @@ import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
 import { campaignRepository } from '../../campaigns/repositories/campaign.repository';
 import { ICampaign } from '../../campaigns/types/campaigns.types';
 import { campaignsService } from '../../campaigns/services/campaigns.service';
+import { productRepository } from '../../products/repositories/product.repository';
+import { IProduct } from '../../products/types/products.types';
 import { qrBatchRepository } from '../repositories/qr-batch.repository';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
 import {
@@ -11,6 +13,7 @@ import {
   QrCodeListFilters,
 } from '../types/qr.types';
 import { generateCodesForBatch } from './qr-generation.service';
+import { generateBatchName } from '../utils/generate-batch-name';
 
 function sanitizeBatch(batch: IQrBatch) {
   return {
@@ -18,7 +21,10 @@ function sanitizeBatch(batch: IQrBatch) {
     name: batch.name,
     totalQrs: batch.totalQrs,
     generatedCount: batch.generatedCount,
+    productId: batch.productId,
+    product: batch.product,
     campaignId: batch.campaignId,
+    description: batch.description,
     status: batch.status,
     createdAt: batch.createdAt,
     updatedAt: batch.updatedAt,
@@ -53,18 +59,60 @@ export class QrBatchService {
     return campaign;
   }
 
+  private async getProductForBatch(productId: string): Promise<IProduct> {
+    const product = await productRepository.findById(productId);
+    if (!product) {
+      throw new NotFoundError(
+        'Product not found',
+        `getProductForBatch: productId=${productId}`
+      );
+    }
+
+    if (product.status !== 'active') {
+      throw new BadRequestError(
+        'Selected product is not active',
+        `getProductForBatch: inactive productId=${productId}`
+      );
+    }
+
+    return product;
+  }
+
+  private resolveCampaignId(
+    inputCampaignId: string | undefined,
+    product: IProduct
+  ): string {
+    const campaignId = inputCampaignId ?? product.campaignId;
+    if (!campaignId) {
+      throw new BadRequestError(
+        'Campaign is required. Link a campaign to the product or pass campaignId',
+        `resolveCampaignId: missing campaign for productId=${product._id}`
+      );
+    }
+    return campaignId;
+  }
+
   async createBatch(input: CreateBatchInput) {
-    const campaign = await this.getCampaignForBatch(input.campaignId);
+    const product = await this.getProductForBatch(input.productId);
+    const campaignId = this.resolveCampaignId(input.campaignId, product);
+    const campaign = await this.getCampaignForBatch(campaignId);
     this.assertCampaignIsActiveForGeneration(campaign);
 
+    const batchName =
+      input.name?.trim() || generateBatchName(product.skuCode);
+
     const batch = await qrBatchRepository.create({
-      name: input.name,
+      name: batchName,
       totalQrs: input.totalQrs,
+      productId: product._id,
       campaignId: campaign._id,
+      description: input.description,
       generatedCount: 0,
       status: QrBatchStatus.DRAFT,
     });
-    return sanitizeBatch(batch);
+
+    const batchWithProduct = await qrBatchRepository.findById(batch._id);
+    return sanitizeBatch(batchWithProduct ?? batch);
   }
 
   async listBatches(page = 1, limit = 20) {
@@ -90,6 +138,13 @@ export class QrBatchService {
     const batch = await qrBatchRepository.findById(id);
     if (!batch) {
       throw new NotFoundError('QR batch not found', `generateBatch: id=${id}`);
+    }
+
+    if (!batch.productId) {
+      throw new BadRequestError(
+        'Assign a product to this batch before generating QR codes',
+        `generateBatch: missing productId id=${id}`
+      );
     }
 
     if (!batch.campaignId) {
@@ -132,8 +187,10 @@ export class QrBatchService {
       throw new NotFoundError('QR batch not found', `generateBatch: id=${id}`);
     }
 
+    const batchWithProduct = await qrBatchRepository.findById(updatedBatch._id);
+
     return {
-      batch: sanitizeBatch(updatedBatch),
+      batch: sanitizeBatch(batchWithProduct ?? updatedBatch),
       newlyGenerated: created,
     };
   }
@@ -205,6 +262,7 @@ export class QrBatchService {
         id: q._id,
         code: q.code,
         batchId: q.batchId,
+        productId: q.productId,
         campaignId: q.campaignId,
         redeemed: q.redeemed,
         redeemedBy: q.redeemedBy,
