@@ -33,14 +33,6 @@ export class QrController {
     sendSuccess(res, 'QR codes generated successfully', result);
   }
 
-  async assignCampaign(req: AuthRequest, res: Response): Promise<void> {
-    const batch = await qrBatchService.assignCampaign(
-      getParam(req.params.id),
-      req.body.campaignId
-    );
-    sendSuccess(res, 'Campaign assigned to batch successfully', { batch });
-  }
-
   async getBatchStats(req: AuthRequest, res: Response): Promise<void> {
     const result = await qrBatchService.getBatchStats(getParam(req.params.id));
     sendSuccess(res, 'Batch statistics fetched successfully', result);
@@ -72,7 +64,7 @@ export class QrController {
 
     await exportBatchQrCodes(
       res,
-      batch.name,
+      batch.batchName,
       batchId,
       format,
       limit

@@ -4,8 +4,9 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../../shared/utils/errors';
-import { campaignsService } from '../../campaigns/services/campaigns.service';
+import { productsService } from '../../products/services/products.service';
 import { qrBatchRepository } from '../../qr/repositories/qr-batch.repository';
+import { qrBatchService } from '../../qr/services/qr-batch.service';
 import { qrCodeRepository } from '../../qr/repositories/qr-code.repository';
 import { rewardsService } from '../../rewards/services/rewards.service';
 import { redemptionTransactionRepository } from '../../transactions/repositories/redemption-transaction.repository';
@@ -28,32 +29,40 @@ export class RedemptionService {
       );
     }
 
-    const campaignId = qrCode.campaignId;
-    if (!campaignId) {
-      throw new BadRequestError(
-        'This QR code is not linked to an active campaign yet',
-        `validateCode: no campaignId code=${code}`
-      );
-    }
-
-    const campaign = await campaignsService.getActiveCampaignById(campaignId);
-
-    if (!campaignsService.isCampaignCurrentlyValid(campaign)) {
-      throw new BadRequestError(
-        'The campaign for this QR code is not active or has expired',
-        `validateCode: campaign invalid campaignId=${campaignId}`
-      );
-    }
-
     const batch = await qrBatchRepository.findById(qrCode.batchId);
+    if (!batch) {
+      throw new BadRequestError(
+        'This QR code is not linked to a coupon batch',
+        `validateCode: no batch code=${code}`
+      );
+    }
+
+    if (qrCode.productId) {
+      await productsService.getActiveProductById(qrCode.productId);
+    }
+
+    if (!qrBatchService.isBatchRedeemable(batch)) {
+      throw new BadRequestError(
+        'This coupon batch is not active or has expired',
+        `validateCode: invalid batch batchId=${batch._id}`
+      );
+    }
 
     return {
       code: qrCode.code,
-      campaign: {
-        id: campaign._id,
-        name: campaign.name,
+      product: batch.product
+        ? {
+            id: batch.product.id,
+            name: batch.product.name,
+            skuCode: batch.product.skuCode,
+          }
+        : null,
+      batch: {
+        id: batch._id,
+        name: batch.name,
+        walletAmount: batch.walletAmount,
+        rewardPoints: batch.rewardPoints,
       },
-      batch: batch ? { id: batch._id, name: batch.name } : null,
       redeemable: true,
     };
   }
@@ -72,27 +81,28 @@ export class RedemptionService {
         );
       }
 
-      const campaignId = qrCode.campaignId;
-      if (!campaignId) {
+      const batch = await qrBatchRepository.findById(qrCode.batchId);
+      if (!batch) {
         throw new BadRequestError(
-          'This QR code is not linked to an active campaign',
-          `redeem: no campaignId code=${code}`
+          'This QR code is not linked to a coupon batch',
+          `redeem: no batch code=${code}`
         );
       }
 
-      const campaign = await campaignsService.getActiveCampaignById(campaignId);
+      if (qrCode.productId) {
+        await productsService.getActiveProductById(qrCode.productId);
+      }
 
-      if (!campaignsService.isCampaignCurrentlyValid(campaign)) {
+      if (!qrBatchService.isBatchRedeemable(batch)) {
         throw new BadRequestError(
-          'The campaign for this QR code is not active or has expired',
-          `redeem: campaign invalid campaignId=${campaignId}`
+          'This coupon batch is not active or has expired',
+          `redeem: invalid batch batchId=${batch._id}`
         );
       }
 
       const updatedQr = await qrCodeRepository.markRedeemedByCode(
         code,
         userId,
-        campaign._id,
         client
       );
 
@@ -105,7 +115,7 @@ export class RedemptionService {
 
       await walletService.creditInSession(
         updatedQr.redeemedBy!,
-        campaign.walletAmount,
+        batch.walletAmount,
         updatedQr._id,
         `QR redemption: ${code}`,
         client
@@ -113,7 +123,7 @@ export class RedemptionService {
 
       await rewardsService.creditInSession(
         updatedQr.redeemedBy!,
-        campaign.rewardPoints,
+        batch.rewardPoints,
         updatedQr._id,
         `QR redemption: ${code}`,
         client
@@ -123,9 +133,9 @@ export class RedemptionService {
         {
           userId,
           qrCodeId: updatedQr._id,
-          campaignId: campaign._id,
-          walletAmount: campaign.walletAmount,
-          rewardPoints: campaign.rewardPoints,
+          productId: batch.productId!,
+          walletAmount: batch.walletAmount,
+          rewardPoints: batch.rewardPoints,
         },
         client
       );
@@ -134,9 +144,10 @@ export class RedemptionService {
         redemption: {
           id: redemptionTx._id,
           code,
-          campaignName: campaign.name,
-          walletAmount: campaign.walletAmount,
-          rewardPoints: campaign.rewardPoints,
+          batchName: batch.name,
+          productName: batch.product?.name,
+          walletAmount: batch.walletAmount,
+          rewardPoints: batch.rewardPoints,
           redeemedAt: updatedQr.redeemedAt,
         },
       };

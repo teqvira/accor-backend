@@ -37,24 +37,11 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires
   ON refresh_tokens(expires_at);
 
-CREATE TABLE IF NOT EXISTS campaigns (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
-  wallet_amount NUMERIC(12,2) DEFAULT 0,
-  reward_points INTEGER DEFAULT 0,
-  start_date TIMESTAMP,
-  end_date TIMESTAMP,
-  active BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS qr_batches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   total_qrs INTEGER NOT NULL,
   generated_count INTEGER DEFAULT 0,
-  campaign_id UUID REFERENCES campaigns(id),
   status VARCHAR(20) DEFAULT 'draft'
     CHECK (status IN ('draft', 'generated', 'assigned')),
   created_at TIMESTAMP DEFAULT NOW(),
@@ -65,7 +52,6 @@ CREATE TABLE IF NOT EXISTS qr_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(100) UNIQUE NOT NULL,
   batch_id UUID REFERENCES qr_batches(id),
-  campaign_id UUID REFERENCES campaigns(id),
   redeemed BOOLEAN DEFAULT false,
   redeemed_by UUID REFERENCES users(id),
   redeemed_at TIMESTAMP,
@@ -108,7 +94,6 @@ CREATE TABLE IF NOT EXISTS redemption_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id),
   qr_code_id UUID UNIQUE NOT NULL REFERENCES qr_codes(id),
-  campaign_id UUID REFERENCES campaigns(id),
   wallet_amount NUMERIC(12,2),
   reward_points INTEGER,
   created_at TIMESTAMP DEFAULT NOW(),

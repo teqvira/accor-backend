@@ -1,8 +1,9 @@
 export enum QrBatchStatus {
   DRAFT = 'draft',
   GENERATED = 'generated',
-  ASSIGNED = 'assigned',
 }
+
+export type CouponDisplayStatus = 'active' | 'expired' | 'inactive' | 'draft';
 
 export interface IQrBatch {
   _id: string;
@@ -10,8 +11,12 @@ export interface IQrBatch {
   totalQrs: number;
   generatedCount: number;
   productId?: string;
-  campaignId?: string;
   description?: string;
+  walletAmount: number;
+  rewardPoints: number;
+  startDate?: Date;
+  endDate?: Date;
+  active: boolean;
   status: QrBatchStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +26,11 @@ export interface IQrBatch {
     name: string;
     imageUrl?: string;
   };
+  stats?: {
+    generated: number;
+    redeemed: number;
+    pending: number;
+  };
 }
 
 export interface IQrCode {
@@ -28,7 +38,6 @@ export interface IQrCode {
   code: string;
   batchId: string;
   productId?: string;
-  campaignId?: string;
   redeemed: boolean;
   redeemedBy?: string;
   redeemedAt?: Date;
@@ -37,18 +46,38 @@ export interface IQrCode {
 }
 
 export interface CreateBatchInput {
-  name?: string;
   productId: string;
-  campaignId?: string;
-  description?: string;
   totalQrs: number;
-}
-
-export interface AssignCampaignInput {
-  campaignId: string;
+  description?: string;
+  walletAmount: number;
+  rewardPoints: number;
+  startDate: string;
+  endDate: string;
+  status?: 'active' | 'inactive';
 }
 
 export interface QrCodeListFilters {
   batchId?: string;
   redeemed?: boolean;
+}
+
+export interface QrBatchListItem {
+  batchId: string;
+  batchName: string;
+  productName: string;
+  productSku: string;
+  productImageUrl?: string;
+  description?: string;
+  generated: number;
+  redeemed: number;
+  pending: number;
+  pdfExportUrl: string;
+  couponStatus: CouponDisplayStatus;
+  totalQrs: number;
+  walletAmount: number;
+  rewardPoints: number;
+  startDate?: string;
+  endDate?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }

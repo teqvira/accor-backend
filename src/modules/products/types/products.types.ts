@@ -7,10 +7,10 @@ export interface IProduct {
   productType: ProductType;
   brand?: string;
   couponCode?: string;
-  campaignId?: string;
   status: ProductStatus;
   description?: string;
   imageUrl?: string;
+  activeCoupons?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,7 +21,6 @@ export interface CreateProductInput {
   productType: ProductType;
   brand?: string;
   couponCode?: string;
-  campaignId?: string;
   status?: ProductStatus;
   description?: string;
   imageUrl?: string;
@@ -33,7 +32,6 @@ export interface UpdateProductInput {
   productType?: ProductType;
   brand?: string | null;
   couponCode?: string | null;
-  campaignId?: string | null;
   status?: ProductStatus;
   description?: string | null;
   imageUrl?: string | null;

@@ -10,7 +10,11 @@ export function validate(schema: Schema, source: 'body' | 'query' = 'body') {
       next(result.error);
       return;
     }
-    req[source] = result.data;
+    if (source === 'query') {
+      Object.assign(req.query as Record<string, unknown>, result.data);
+    } else {
+      req.body = result.data;
+    }
     next();
   };
 }

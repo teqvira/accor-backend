@@ -12,17 +12,17 @@ interface ProductRow {
   product_type: ProductType;
   brand: string | null;
   coupon_code: string | null;
-  campaign_id: string | null;
   status: ProductStatus;
   description: string | null;
   image_url: string | null;
   created_at: Date;
   updated_at: Date;
+  active_coupons?: string | number;
 }
 
-const PRODUCT_COLUMNS = `
-  id, sku_code, name, product_type, brand, coupon_code, campaign_id, status,
-  description, image_url, created_at, updated_at
+const PRODUCT_LIST_COLUMNS = `
+  p.id, p.sku_code, p.name, p.product_type, p.brand, p.coupon_code, p.status,
+  p.description, p.image_url, p.created_at, p.updated_at
 `;
 
 export function mapProductRow(row: ProductRow): IProduct {
@@ -33,10 +33,11 @@ export function mapProductRow(row: ProductRow): IProduct {
     productType: row.product_type,
     brand: row.brand ?? undefined,
     couponCode: row.coupon_code ?? undefined,
-    campaignId: row.campaign_id ?? undefined,
     status: row.status,
     description: row.description ?? undefined,
     imageUrl: row.image_url ?? undefined,
+    activeCoupons:
+      row.active_coupons !== undefined ? Number(row.active_coupons) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -48,7 +49,6 @@ export interface CreateProductData {
   productType: ProductType;
   brand?: string;
   couponCode?: string;
-  campaignId?: string;
   status?: ProductStatus;
   description?: string;
   imageUrl?: string;
@@ -60,7 +60,6 @@ export interface UpdateProductData {
   productType?: ProductType;
   brand?: string | null;
   couponCode?: string | null;
-  campaignId?: string | null;
   status?: ProductStatus;
   description?: string | null;
   imageUrl?: string | null;
@@ -75,23 +74,23 @@ function buildListWhereClause(filters: ProductListFilters): {
   let paramIndex = 1;
 
   if (filters.productType) {
-    conditions.push(`product_type = $${paramIndex++}`);
+    conditions.push(`p.product_type = $${paramIndex++}`);
     values.push(filters.productType);
   }
 
   if (filters.status) {
-    conditions.push(`status = $${paramIndex++}`);
+    conditions.push(`p.status = $${paramIndex++}`);
     values.push(filters.status);
   }
 
   if (filters.brand) {
-    conditions.push(`brand ILIKE $${paramIndex++}`);
+    conditions.push(`p.brand ILIKE $${paramIndex++}`);
     values.push(`%${filters.brand}%`);
   }
 
   if (filters.search) {
     conditions.push(
-      `(name ILIKE $${paramIndex} OR sku_code ILIKE $${paramIndex})`
+      `(p.name ILIKE $${paramIndex} OR p.sku_code ILIKE $${paramIndex})`
     );
     values.push(`%${filters.search}%`);
     paramIndex++;
@@ -107,16 +106,16 @@ export const productRepository = {
   create: async (data: CreateProductData): Promise<IProduct> => {
     const result = await pool.query<ProductRow>(
       `INSERT INTO products
-         (sku_code, name, product_type, brand, coupon_code, campaign_id, status, description, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING ${PRODUCT_COLUMNS}`,
+         (sku_code, name, product_type, brand, coupon_code, status, description, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
+                 description, image_url, created_at, updated_at`,
       [
         data.skuCode,
         data.name,
         data.productType,
         data.brand ?? null,
         data.couponCode ?? null,
-        data.campaignId ?? null,
         data.status ?? 'active',
         data.description ?? null,
         data.imageUrl ?? null,
@@ -127,7 +126,12 @@ export const productRepository = {
 
   findById: async (id: string): Promise<IProduct | null> => {
     const result = await pool.query<ProductRow>(
-      `SELECT ${PRODUCT_COLUMNS} FROM products WHERE id = $1`,
+      `SELECT ${PRODUCT_LIST_COLUMNS},
+              COALESCE(SUM(b.generated_count), 0)::text AS active_coupons
+       FROM products p
+       LEFT JOIN qr_batches b ON b.product_id = p.id
+       WHERE p.id = $1
+       GROUP BY p.id`,
       [id]
     );
     return result.rows[0] ? mapProductRow(result.rows[0]) : null;
@@ -135,7 +139,9 @@ export const productRepository = {
 
   findBySkuCode: async (skuCode: string): Promise<IProduct | null> => {
     const result = await pool.query<ProductRow>(
-      `SELECT ${PRODUCT_COLUMNS} FROM products WHERE sku_code = $1`,
+      `SELECT id, sku_code, name, product_type, brand, coupon_code, status,
+              description, image_url, created_at, updated_at
+       FROM products WHERE sku_code = $1`,
       [skuCode]
     );
     return result.rows[0] ? mapProductRow(result.rows[0]) : null;
@@ -151,15 +157,18 @@ export const productRepository = {
 
     const [itemsResult, countResult] = await Promise.all([
       pool.query<ProductRow>(
-        `SELECT ${PRODUCT_COLUMNS}
-         FROM products
+        `SELECT ${PRODUCT_LIST_COLUMNS},
+                COALESCE(SUM(b.generated_count), 0)::text AS active_coupons
+         FROM products p
+         LEFT JOIN qr_batches b ON b.product_id = p.id
          ${clause}
-         ORDER BY created_at DESC
+         GROUP BY p.id
+         ORDER BY p.created_at DESC
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, limit, offset]
       ),
       pool.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM products ${clause}`,
+        `SELECT COUNT(*)::text AS count FROM products p ${clause}`,
         values
       ),
     ]);
@@ -168,6 +177,13 @@ export const productRepository = {
       items: itemsResult.rows.map(mapProductRow),
       total: Number(countResult.rows[0]?.count ?? 0),
     };
+  },
+
+  countActive: async (): Promise<number> => {
+    const result = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM products WHERE status = 'active'`
+    );
+    return Number(result.rows[0]?.count ?? 0);
   },
 
   update: async (
@@ -186,13 +202,13 @@ export const productRepository = {
            product_type = $4,
            brand = $5,
            coupon_code = $6,
-           campaign_id = $7,
-           status = $8,
-           description = $9,
-           image_url = $10,
+           status = $7,
+           description = $8,
+           image_url = $9,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING ${PRODUCT_COLUMNS}`,
+       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
+                 description, image_url, created_at, updated_at`,
       [
         id,
         data.skuCode,
@@ -200,7 +216,6 @@ export const productRepository = {
         data.productType,
         data.brand ?? null,
         data.couponCode ?? null,
-        data.campaignId ?? null,
         data.status,
         data.description ?? null,
         data.imageUrl ?? null,
@@ -217,7 +232,8 @@ export const productRepository = {
       `UPDATE products
        SET status = $2, updated_at = NOW()
        WHERE id = $1
-       RETURNING ${PRODUCT_COLUMNS}`,
+       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
+                 description, image_url, created_at, updated_at`,
       [id, status]
     );
     return result.rows[0] ? mapProductRow(result.rows[0]) : null;

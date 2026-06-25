@@ -7,7 +7,6 @@ interface QrCodeRow {
   code: string;
   batch_id: string;
   product_id: string | null;
-  campaign_id: string | null;
   redeemed: boolean;
   redeemed_by: string | null;
   redeemed_at: Date | null;
@@ -21,7 +20,6 @@ export function mapQrCodeRow(row: QrCodeRow): IQrCode {
     code: row.code,
     batchId: row.batch_id,
     productId: row.product_id ?? undefined,
-    campaignId: row.campaign_id ?? undefined,
     redeemed: row.redeemed,
     redeemedBy: row.redeemed_by ?? undefined,
     redeemedAt: row.redeemed_at ?? undefined,
@@ -31,7 +29,7 @@ export function mapQrCodeRow(row: QrCodeRow): IQrCode {
 }
 
 const CODE_COLUMNS = `
-  id, code, batch_id, product_id, campaign_id, redeemed, redeemed_by, redeemed_at,
+  id, code, batch_id, product_id, redeemed, redeemed_by, redeemed_at,
   created_at, updated_at
 `;
 
@@ -41,16 +39,15 @@ export interface QrCodeInsertDoc {
   code: string;
   batchId: string;
   productId?: string;
-  campaignId?: string;
 }
 
 export const qrCodeRepository = {
   create: async (data: QrCodeInsertDoc): Promise<IQrCode> => {
     const result = await pool.query<QrCodeRow>(
-      `INSERT INTO qr_codes (code, batch_id, product_id, campaign_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO qr_codes (code, batch_id, product_id)
+       VALUES ($1, $2, $3)
        RETURNING ${CODE_COLUMNS}`,
-      [data.code, data.batchId, data.productId ?? null, data.campaignId ?? null]
+      [data.code, data.batchId, data.productId ?? null]
     );
     return mapQrCodeRow(result.rows[0]);
   },
@@ -63,19 +60,12 @@ export const qrCodeRepository = {
     let paramIndex = 1;
 
     for (const doc of docs) {
-      placeholders.push(
-        `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`
-      );
-      values.push(
-        doc.code,
-        doc.batchId,
-        doc.productId ?? null,
-        doc.campaignId ?? null
-      );
+      placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
+      values.push(doc.code, doc.batchId, doc.productId ?? null);
     }
 
     const result = await pool.query<{ id: string }>(
-      `INSERT INTO qr_codes (code, batch_id, product_id, campaign_id)
+      `INSERT INTO qr_codes (code, batch_id, product_id)
        VALUES ${placeholders.join(', ')}
        ON CONFLICT (code) DO NOTHING
        RETURNING id`,
@@ -264,23 +254,9 @@ export const qrCodeRepository = {
     return result.rows.map((row) => row.code);
   },
 
-  updateCampaignForUnredeemed: async (
-    batchId: string,
-    campaignId: string
-  ): Promise<number> => {
-    const result = await pool.query(
-      `UPDATE qr_codes
-       SET campaign_id = $2, updated_at = NOW()
-       WHERE batch_id = $1 AND redeemed = false`,
-      [batchId, campaignId]
-    );
-    return result.rowCount ?? 0;
-  },
-
   markRedeemed: async (
     id: string,
     userId: string,
-    campaignId: string,
     client?: Queryable
   ): Promise<IQrCode | null> => {
     const db = client ?? pool;
@@ -289,11 +265,10 @@ export const qrCodeRepository = {
        SET redeemed = true,
            redeemed_by = $2,
            redeemed_at = NOW(),
-           campaign_id = $3,
            updated_at = NOW()
        WHERE id = $1 AND redeemed = false
        RETURNING ${CODE_COLUMNS}`,
-      [id, userId, campaignId]
+      [id, userId]
     );
     return result.rows[0] ? mapQrCodeRow(result.rows[0]) : null;
   },
@@ -301,7 +276,6 @@ export const qrCodeRepository = {
   markRedeemedByCode: async (
     code: string,
     userId: string,
-    campaignId: string,
     client?: Queryable
   ): Promise<IQrCode | null> => {
     const db = client ?? pool;
@@ -310,11 +284,10 @@ export const qrCodeRepository = {
        SET redeemed = true,
            redeemed_by = $2,
            redeemed_at = NOW(),
-           campaign_id = $3,
            updated_at = NOW()
        WHERE code = $1 AND redeemed = false
        RETURNING ${CODE_COLUMNS}`,
-      [code, userId, campaignId]
+      [code, userId]
     );
     return result.rows[0] ? mapQrCodeRow(result.rows[0]) : null;
   },

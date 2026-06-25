@@ -1,7 +1,6 @@
 import { Express } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authRoutes } from '../modules/auth';
-import { campaignsRoutes } from '../modules/campaigns';
 import { uploadRoutes } from '../modules/file-upload';
 import { qrRoutes } from '../modules/qr';
 import { redemptionRoutes } from '../modules/redemption';
@@ -57,7 +56,6 @@ const uploadLimiter = rateLimit({
 
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authLimiter, authRoutes);
-  app.use('/api/campaigns', campaignsRoutes);
   app.use('/api/products', productsRoutes);
   app.use('/api/qr', qrRoutes);
   app.use('/api/wallet', walletRoutes);

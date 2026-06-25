@@ -2,7 +2,7 @@ export interface IRedemptionTransaction {
   _id: string;
   userId: string;
   qrCodeId: string;
-  campaignId: string;
+  productId: string;
   walletAmount: number;
   rewardPoints: number;
   createdAt: Date;
@@ -12,7 +12,7 @@ export interface IRedemptionTransaction {
 export interface CreateRedemptionTransactionData {
   userId: string;
   qrCodeId: string;
-  campaignId: string;
+  productId: string;
   walletAmount: number;
   rewardPoints: number;
 }

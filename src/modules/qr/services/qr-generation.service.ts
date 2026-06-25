@@ -23,7 +23,6 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
       code: string;
       batchId: string;
       productId?: string;
-      campaignId?: string;
     }> = [];
     const codes = new Set<string>();
 
@@ -35,7 +34,6 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
         code,
         batchId: batch._id,
         ...(batch.productId ? { productId: batch.productId } : {}),
-        ...(batch.campaignId ? { campaignId: batch.campaignId } : {}),
       });
     }
 

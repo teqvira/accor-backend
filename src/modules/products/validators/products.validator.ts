@@ -4,6 +4,13 @@ import {
   PRODUCT_TYPES,
 } from '../constants/products.constants';
 
+function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    schema
+  );
+}
+
 const productBaseSchema = z.object({
   skuCode: z
     .string()
@@ -18,7 +25,6 @@ const productBaseSchema = z.object({
   productType: z.enum(PRODUCT_TYPES),
   brand: z.string().trim().min(1).max(100).optional(),
   couponCode: z.string().trim().min(1).max(100).optional(),
-  campaignId: z.string().min(1).optional(),
   status: z.enum(PRODUCT_STATUSES).default('active'),
   description: z.string().trim().max(5000).optional(),
   imageUrl: z.string().trim().url('Image URL must be valid').optional(),
@@ -31,7 +37,6 @@ export const updateProductSchema = productBaseSchema
   .extend({
     brand: z.string().trim().min(1).max(100).nullable().optional(),
     couponCode: z.string().trim().min(1).max(100).nullable().optional(),
-    campaignId: z.string().min(1).nullable().optional(),
     description: z.string().trim().max(5000).nullable().optional(),
     imageUrl: z.string().trim().url('Image URL must be valid').nullable().optional(),
   })
@@ -42,8 +47,8 @@ export const updateProductSchema = productBaseSchema
 export const listProductsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
-  productType: z.enum(PRODUCT_TYPES).optional(),
-  status: z.enum(PRODUCT_STATUSES).optional(),
-  brand: z.string().trim().min(1).max(100).optional(),
-  search: z.string().trim().min(1).max(200).optional(),
+  productType: emptyToUndefined(z.enum(PRODUCT_TYPES).optional()),
+  status: emptyToUndefined(z.enum(PRODUCT_STATUSES).optional()),
+  brand: emptyToUndefined(z.string().trim().min(1).max(100).optional()),
+  search: emptyToUndefined(z.string().trim().min(1).max(200).optional()),
 });

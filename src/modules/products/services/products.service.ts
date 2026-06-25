@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError } from '../../../shared/utils/errors';
+import { BadRequestError, ConflictError, NotFoundError } from '../../../shared/utils/errors';
 import { productRepository } from '../repositories/product.repository';
 import {
   CreateProductInput,
@@ -15,16 +15,30 @@ function sanitizeProduct(product: IProduct) {
     productType: product.productType,
     brand: product.brand,
     couponCode: product.couponCode,
-    campaignId: product.campaignId,
     status: product.status,
     description: product.description,
     imageUrl: product.imageUrl,
+    activeCoupons: product.activeCoupons ?? 0,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
 }
 
 export class ProductsService {
+  async getActiveProductById(id: string): Promise<IProduct> {
+    const product = await productRepository.findById(id);
+    if (!product) {
+      throw new NotFoundError('Product not found', `getActiveProductById: id=${id}`);
+    }
+    if (product.status !== 'active') {
+      throw new BadRequestError(
+        'This product is not active',
+        `getActiveProductById: inactive id=${id}`
+      );
+    }
+    return product;
+  }
+
   async create(input: CreateProductInput) {
     const existing = await productRepository.findBySkuCode(input.skuCode);
     if (existing) {
@@ -40,13 +54,12 @@ export class ProductsService {
       productType: input.productType,
       brand: input.brand,
       couponCode: input.couponCode,
-      campaignId: input.campaignId,
       status: input.status ?? 'active',
       description: input.description,
       imageUrl: input.imageUrl,
     });
 
-    return sanitizeProduct(product);
+    return sanitizeProduct({ ...product, activeCoupons: 0 });
   }
 
   async list(page = 1, limit = 20, filters: ProductListFilters = {}) {
@@ -91,8 +104,6 @@ export class ProductsService {
       brand: input.brand !== undefined ? input.brand : product.brand ?? null,
       couponCode:
         input.couponCode !== undefined ? input.couponCode : product.couponCode ?? null,
-      campaignId:
-        input.campaignId !== undefined ? input.campaignId : product.campaignId ?? null,
       status: input.status ?? product.status,
       description:
         input.description !== undefined ? input.description : product.description ?? null,
@@ -103,7 +114,8 @@ export class ProductsService {
       throw new NotFoundError('Product not found', `update: id=${id}`);
     }
 
-    return sanitizeProduct(updated);
+    const withCounts = await productRepository.findById(id);
+    return sanitizeProduct(withCounts ?? updated);
   }
 
   async activate(id: string) {
@@ -111,7 +123,8 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundError('Product not found', `activate: id=${id}`);
     }
-    return sanitizeProduct(product);
+    const withCounts = await productRepository.findById(id);
+    return sanitizeProduct(withCounts ?? product);
   }
 
   async deactivate(id: string) {
@@ -119,7 +132,8 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundError('Product not found', `deactivate: id=${id}`);
     }
-    return sanitizeProduct(product);
+    const withCounts = await productRepository.findById(id);
+    return sanitizeProduct(withCounts ?? product);
   }
 }
 

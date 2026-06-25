@@ -1,17 +1,9 @@
-import { customAlphabet } from 'nanoid';
+import pool from '../../../database/connection';
 
-const generateSuffix = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6);
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^A-Za-z0-9-]/g, '')
-    .slice(0, 24);
-}
-
-export function generateBatchName(campaignName?: string): string {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const prefix = campaignName ? slugify(campaignName) : 'BATCH';
-  return `${prefix}-${date}-${generateSuffix()}`;
+export async function generateNextBatchLabel(): Promise<string> {
+  const result = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM qr_batches`
+  );
+  const next = Number(result.rows[0]?.count ?? 0) + 1;
+  return `BATCH-${String(next).padStart(3, '0')}`;
 }

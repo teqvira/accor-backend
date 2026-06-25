@@ -1,6 +1,6 @@
 import { userRepository } from '../../auth/repositories/user.repository';
 import { UserRole } from '../../auth/types/user.types';
-import { campaignRepository } from '../../campaigns/repositories/campaign.repository';
+import { productRepository } from '../../products/repositories/product.repository';
 import { qrBatchRepository } from '../../qr/repositories/qr-batch.repository';
 import { qrCodeRepository } from '../../qr/repositories/qr-code.repository';
 import { rewardTransactionRepository } from '../../rewards/repositories/reward-transaction.repository';
@@ -27,8 +27,8 @@ export class TransactionsService {
       totalBatches,
       totalQrCodes,
       redeemedQrCodes,
-      totalCampaigns,
-      activeCampaigns,
+      totalProducts,
+      activeProducts,
       totalRedemptions,
       totalWalletCredits,
       totalRewardCredits,
@@ -37,8 +37,8 @@ export class TransactionsService {
       qrBatchRepository.count(),
       qrCodeRepository.count(),
       qrCodeRepository.count({ redeemed: true }),
-      campaignRepository.count(),
-      campaignRepository.countActive(),
+      productRepository.findAll(1, 1).then((r) => r.total),
+      productRepository.countActive(),
       redemptionTransactionRepository.count(),
       walletTransactionRepository.sumCredits(),
       rewardTransactionRepository.sumCredits(),
@@ -50,8 +50,8 @@ export class TransactionsService {
       totalQrCodes,
       redeemedQrCodes,
       unredeemedQrCodes: totalQrCodes - redeemedQrCodes,
-      totalCampaigns,
-      activeCampaigns,
+      totalProducts,
+      activeProducts,
       totalRedemptions,
       totalWalletCredits,
       totalRewardCredits,

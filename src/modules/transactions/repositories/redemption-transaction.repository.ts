@@ -11,7 +11,7 @@ interface RedemptionTransactionRow {
   id: string;
   user_id: string;
   qr_code_id: string;
-  campaign_id: string;
+  product_id: string;
   wallet_amount: string | number;
   reward_points: number;
   created_at: Date;
@@ -25,7 +25,7 @@ export function mapRedemptionTransactionRow(
     _id: row.id,
     userId: row.user_id,
     qrCodeId: row.qr_code_id,
-    campaignId: row.campaign_id,
+    productId: row.product_id,
     walletAmount: Number(row.wallet_amount),
     rewardPoints: row.reward_points,
     createdAt: row.created_at,
@@ -34,7 +34,7 @@ export function mapRedemptionTransactionRow(
 }
 
 const TX_COLUMNS = `
-  id, user_id, qr_code_id, campaign_id, wallet_amount, reward_points,
+  id, user_id, qr_code_id, product_id, wallet_amount, reward_points,
   created_at, updated_at
 `;
 
@@ -46,13 +46,13 @@ export const redemptionTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<RedemptionTransactionRow>(
       `INSERT INTO redemption_transactions
-         (user_id, qr_code_id, campaign_id, wallet_amount, reward_points)
+         (user_id, qr_code_id, product_id, wallet_amount, reward_points)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
         data.qrCodeId,
-        data.campaignId,
+        data.productId,
         data.walletAmount,
         data.rewardPoints,
       ]
@@ -144,7 +144,7 @@ export const redemptionTransactionRepository = {
       id: string;
       user: { _id: string; mobileNumber?: string; name?: string };
       qrCode: { _id: string; code: string };
-      campaign: { _id: string; name: string };
+      product: { _id: string; name: string; skuCode: string };
       walletAmount: number;
       rewardPoints: number;
       createdAt: Date;
@@ -163,8 +163,9 @@ export const redemptionTransactionRepository = {
         user_name: string | null;
         qr_code_id: string;
         code: string;
-        campaign_id: string;
-        campaign_name: string;
+        product_id: string;
+        product_name: string;
+        product_sku: string;
       }>(
         `SELECT
            rt.id,
@@ -176,12 +177,13 @@ export const redemptionTransactionRepository = {
            u.name AS user_name,
            qc.id AS qr_code_id,
            qc.code,
-           c.id AS campaign_id,
-           c.name AS campaign_name
+           p.id AS product_id,
+           p.name AS product_name,
+           p.sku_code AS product_sku
          FROM redemption_transactions rt
          LEFT JOIN users u ON rt.user_id = u.id
          LEFT JOIN qr_codes qc ON rt.qr_code_id = qc.id
-         LEFT JOIN campaigns c ON rt.campaign_id = c.id
+         LEFT JOIN products p ON rt.product_id = p.id
          ORDER BY rt.created_at DESC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
@@ -203,9 +205,10 @@ export const redemptionTransactionRepository = {
           _id: row.qr_code_id,
           code: row.code,
         },
-        campaign: {
-          _id: row.campaign_id,
-          name: row.campaign_name,
+        product: {
+          _id: row.product_id,
+          name: row.product_name,
+          skuCode: row.product_sku,
         },
         walletAmount: Number(row.wallet_amount),
         rewardPoints: row.reward_points,

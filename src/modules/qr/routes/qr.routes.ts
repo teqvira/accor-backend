@@ -4,10 +4,7 @@ import { authenticate, requireRoles } from '../../auth/middleware/auth.middlewar
 import { UserRole } from '../../auth';
 import { AuthRequest } from '../../auth/types/auth.types';
 import { qrController } from '../controllers/qr.controller';
-import {
-  assignCampaignSchema,
-  createBatchSchema,
-} from '../validators/qr.validator';
+import { createBatchSchema } from '../validators/qr.validator';
 
 const router = Router();
 
@@ -42,13 +39,6 @@ router.post(
   '/batches/:id/generate',
   ...adminOnly,
   asyncHandler((req, res) => qrController.generateBatch(req, res))
-);
-
-router.patch(
-  '/batches/:id/assign-campaign',
-  ...adminOnly,
-  validate(assignCampaignSchema),
-  asyncHandler((req, res) => qrController.assignCampaign(req, res))
 );
 
 router.get(
