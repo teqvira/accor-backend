@@ -80,8 +80,8 @@ export interface CreateQrBatchData {
   description?: string;
   walletAmount: number;
   rewardPoints: number;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   active?: boolean;
   generatedCount?: number;
   status?: QrBatchStatus;
@@ -103,8 +103,8 @@ export const qrBatchRepository = {
         data.description ?? null,
         data.walletAmount,
         data.rewardPoints,
-        data.startDate,
-        data.endDate,
+        data.startDate ?? null,
+        data.endDate ?? null,
         data.active ?? true,
         data.status ?? QrBatchStatus.DRAFT,
       ]

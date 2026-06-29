@@ -51,8 +51,8 @@ export interface CreateBatchInput {
   description?: string;
   walletAmount: number;
   rewardPoints: number;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   status?: 'active' | 'inactive';
 }
 

@@ -1,10 +1,17 @@
 import { z } from 'zod';
 
+function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    schema
+  );
+}
+
 const batchRewardFields = {
   walletAmount: z.coerce.number().min(0),
   rewardPoints: z.coerce.number().min(0),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  startDate: emptyToUndefined(z.string().min(1).optional()),
+  endDate: emptyToUndefined(z.string().min(1).optional()),
 };
 
 export const createBatchSchema = z
@@ -15,10 +22,18 @@ export const createBatchSchema = z
     status: z.enum(['active', 'inactive']).default('active'),
     ...batchRewardFields,
   })
-  .refine((data) => new Date(data.endDate) >= new Date(data.startDate), {
-    message: 'End date must be on or after start date',
-    path: ['endDate'],
-  });
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        return new Date(data.endDate) >= new Date(data.startDate);
+      }
+      return true;
+    },
+    {
+      message: 'End date must be on or after start date',
+      path: ['endDate'],
+    }
+  );
 
 export const listCodesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
