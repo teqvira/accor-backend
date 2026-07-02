@@ -62,13 +62,13 @@ export class QrController {
     const format = parseQrExportFormat(req.query.format);
     const limit = getQueryNumber(req.query.limit, 1000);
 
-    await exportBatchQrCodes(
-      res,
-      batch.batchName,
+    await exportBatchQrCodes(res, {
+      batchName: batch.batchName,
       batchId,
+      productSku: batch.productSku,
       format,
-      limit
-    );
+      limit,
+    });
   }
 }
 

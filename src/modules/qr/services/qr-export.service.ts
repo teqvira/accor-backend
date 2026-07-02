@@ -5,6 +5,11 @@ import { Response } from 'express';
 import { QrExportFormat } from '../constants/qr.constants';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
 import { buildQrPayload } from './qr-generation.service';
+import {
+  drawQrLabel,
+  QR_LABEL_SIZE,
+  QrLabelMetadata,
+} from '../utils/qr-label.renderer';
 
 async function streamZipExport(
   res: Response,
@@ -36,7 +41,8 @@ async function streamZipExport(
 async function streamPdfExport(
   res: Response,
   batchName: string,
-  codes: string[]
+  codes: string[],
+  metadata: QrLabelMetadata
 ): Promise<void> {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader(
@@ -44,16 +50,18 @@ async function streamPdfExport(
     `attachment; filename="${batchName.replace(/\s+/g, '_')}_qrs.pdf"`
   );
 
-  const doc = new PDFDocument({ autoFirstPage: false });
+  const doc = new PDFDocument({ autoFirstPage: false, size: 'LETTER' });
   doc.pipe(res);
 
-  const cols = 3;
-  const rows = 4;
+  const cols = 2;
+  const rows = 2;
   const perPage = cols * rows;
-  const cellW = 180;
-  const cellH = 200;
-  const marginX = 30;
-  const marginY = 40;
+  const marginX = 36;
+  const marginY = 48;
+  const gapX = 20;
+  const gapY = 24;
+  const cellW = QR_LABEL_SIZE + gapX;
+  const cellH = QR_LABEL_SIZE + gapY;
 
   for (let i = 0; i < codes.length; i++) {
     if (i % perPage === 0) doc.addPage();
@@ -64,12 +72,7 @@ async function streamPdfExport(
     const x = marginX + col * cellW;
     const y = marginY + row * cellH;
 
-    const code = codes[i];
-    const payload = buildQrPayload(code);
-    const pngBuffer = await QRCode.toBuffer(payload, { width: 150, margin: 1 });
-
-    doc.image(pngBuffer, x, y, { width: 120, height: 120 });
-    doc.fontSize(8).text(code, x, y + 125, { width: 120, align: 'center' });
+    await drawQrLabel(doc, x, y, codes[i], metadata);
   }
 
   doc.info.Title = `${batchName} QR Codes`;
@@ -96,13 +99,19 @@ async function streamPngExport(
   await streamZipExport(res, batchName, codes);
 }
 
+export interface ExportBatchQrOptions {
+  batchName: string;
+  batchId: string;
+  productSku?: string;
+  format: QrExportFormat;
+  limit?: number;
+}
+
 export async function exportBatchQrCodes(
   res: Response,
-  batchName: string,
-  batchId: string,
-  format: QrExportFormat,
-  limit = 1000
+  options: ExportBatchQrOptions
 ): Promise<void> {
+  const { batchName, batchId, productSku, format, limit = 1000 } = options;
   const codes = await qrCodeRepository.findCodesByBatchId(batchId, limit);
 
   if (codes.length === 0) {
@@ -114,9 +123,15 @@ export async function exportBatchQrCodes(
     return;
   }
 
+  const labelMetadata: QrLabelMetadata = {
+    batchId,
+    batchName,
+    productSku,
+  };
+
   switch (format) {
     case 'pdf':
-      await streamPdfExport(res, batchName, codes);
+      await streamPdfExport(res, batchName, codes, labelMetadata);
       break;
     case 'png':
       await streamPngExport(res, batchName, codes);
