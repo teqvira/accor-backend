@@ -53,13 +53,17 @@ async function streamPdfExport(
   const doc = new PDFDocument({ autoFirstPage: false, size: 'LETTER' });
   doc.pipe(res);
 
-  const cols = 2;
-  const rows = 2;
+  const cols = 3;
+  const rows = 4;
   const perPage = cols * rows;
-  const marginX = 36;
-  const marginY = 48;
-  const gapX = 20;
-  const gapY = 24;
+  const gapX = 14;
+  const gapY = 14;
+  const gridW = cols * QR_LABEL_SIZE + (cols - 1) * gapX;
+  const gridH = rows * QR_LABEL_SIZE + (rows - 1) * gapY;
+  const pageW = 612;
+  const pageH = 792;
+  const marginX = (pageW - gridW) / 2;
+  const marginY = (pageH - gridH) / 2;
   const cellW = QR_LABEL_SIZE + gapX;
   const cellH = QR_LABEL_SIZE + gapY;
 
