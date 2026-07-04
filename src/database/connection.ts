@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { env } from '../config/env';
 
-const isLocalDb = env.DB_HOST === 'localhost' || env.DB_HOST === '127.0.0.1';
+const isLocalDb = env.DB_HOST === 'localhost' || env.DB_HOST === '127.0.0.1' || env.DB_HOST === 'postgres';
 
 const pool = new Pool({
   host: env.DB_HOST,
