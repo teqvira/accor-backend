@@ -5,16 +5,15 @@ import multerS3 from 'multer-s3';
 import { env } from '../../../config/env';
 import { AuthRequest } from '../../auth/types/auth.types';
 import s3Client from '../config/s3Config';
+import {
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_IMAGE_TYPES,
+  MAX_IMAGE_SIZE_BYTES,
+} from '../constants/upload.constants';
 import { sanitizeFilename } from '../utils/sanitizeFilename';
 
-const ALLOWED_IMAGE_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-]);
-
-const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const ALLOWED_IMAGE_TYPE_SET = new Set<string>(ALLOWED_IMAGE_TYPES);
+const ALLOWED_EXTENSION_SET = new Set<string>(ALLOWED_IMAGE_EXTENSIONS);
 
 const upload = multer({
   storage: multerS3({
@@ -35,7 +34,7 @@ const upload = multer({
   fileFilter(_req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase();
 
-    if (ALLOWED_IMAGE_TYPES.has(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
+    if (ALLOWED_IMAGE_TYPE_SET.has(file.mimetype) && ALLOWED_EXTENSION_SET.has(ext)) {
       cb(null, true);
       return;
     }
@@ -43,7 +42,7 @@ const upload = multer({
     cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
   },
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: MAX_IMAGE_SIZE_BYTES,
   },
 });
 

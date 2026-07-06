@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isOwnBucketObjectUrl } from '../../file-upload/utils/s3Object';
 import {
   PRODUCT_STATUSES,
   PRODUCT_TYPES,
@@ -10,6 +11,12 @@ function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
     schema
   );
 }
+
+const productImageUrlSchema = z
+  .string()
+  .trim()
+  .url('Image URL must be valid')
+  .refine(isOwnBucketObjectUrl, 'Image URL must be an uploaded product image');
 
 const productBaseSchema = z.object({
   skuCode: z
@@ -27,7 +34,7 @@ const productBaseSchema = z.object({
   couponCode: z.string().trim().min(1).max(100).optional(),
   status: z.enum(PRODUCT_STATUSES).default('active'),
   description: z.string().trim().max(5000).optional(),
-  imageUrl: z.string().trim().url('Image URL must be valid').optional(),
+  imageUrl: productImageUrlSchema.optional(),
 });
 
 export const createProductSchema = productBaseSchema;
@@ -38,7 +45,7 @@ export const updateProductSchema = productBaseSchema
     brand: z.string().trim().min(1).max(100).nullable().optional(),
     couponCode: z.string().trim().min(1).max(100).nullable().optional(),
     description: z.string().trim().max(5000).nullable().optional(),
-    imageUrl: z.string().trim().url('Image URL must be valid').nullable().optional(),
+    imageUrl: z.union([z.null(), productImageUrlSchema]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field is required',
