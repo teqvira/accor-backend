@@ -1,11 +1,24 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate } from '../../auth/middleware/auth.middleware';
+import { validate } from '../../../shared/middleware/validate';
+import { asyncHandler } from '../../../shared/middleware/asyncHandler';
+import { authenticate, requireRoles } from '../../auth/middleware/auth.middleware';
+import { UserRole } from '../../auth';
 import { sendError } from '../../../shared/utils/response';
-import { uploadImage } from '../controller/uploadController';
+import { createPresignedUploadUrl, uploadImage } from '../controller/uploadController';
 import upload from '../service/uploadService';
+import { presignedUploadSchema } from '../validators/upload.validator';
 
 const router = Router();
+
+const adminOnly = [authenticate, requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN)];
+
+router.post(
+  '/presigned-url',
+  ...adminOnly,
+  validate(presignedUploadSchema),
+  asyncHandler(createPresignedUploadUrl)
+);
 
 router.post(
   '/',
