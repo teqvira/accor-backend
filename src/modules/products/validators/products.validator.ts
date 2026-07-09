@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isOwnBucketObjectUrl } from '../../file-upload/utils/s3Object';
 import {
   PRODUCT_STATUSES,
+  PRODUCT_TEXT_MAX_LENGTH,
   PRODUCT_TYPES,
 } from '../constants/products.constants';
 
@@ -22,18 +23,14 @@ const productBaseSchema = z.object({
   skuCode: z
     .string()
     .trim()
-    .min(2, 'SKU code must be at least 2 characters')
-    .max(50, 'SKU code must be at most 50 characters')
-    .regex(
-      /^[A-Za-z0-9-]+$/,
-      'SKU code may only contain letters, numbers, and hyphens'
-    ),
-  name: z.string().trim().min(2).max(500),
+    .min(1, 'SKU code is required')
+    .max(PRODUCT_TEXT_MAX_LENGTH),
+  name: z.string().trim().min(2).max(PRODUCT_TEXT_MAX_LENGTH),
   productType: z.enum(PRODUCT_TYPES),
-  brand: z.string().trim().min(1).max(100).optional(),
-  couponCode: z.string().trim().min(1).max(100).optional(),
+  brand: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
+  couponCode: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
   status: z.enum(PRODUCT_STATUSES).default('active'),
-  description: z.string().trim().max(5000).optional(),
+  description: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
   imageUrl: productImageUrlSchema.optional(),
 });
 
@@ -42,9 +39,19 @@ export const createProductSchema = productBaseSchema;
 export const updateProductSchema = productBaseSchema
   .partial()
   .extend({
-    brand: z.string().trim().min(1).max(100).nullable().optional(),
-    couponCode: z.string().trim().min(1).max(100).nullable().optional(),
-    description: z.string().trim().max(5000).nullable().optional(),
+    brand: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).nullable().optional(),
+    couponCode: z
+      .string()
+      .trim()
+      .max(PRODUCT_TEXT_MAX_LENGTH)
+      .nullable()
+      .optional(),
+    description: z
+      .string()
+      .trim()
+      .max(PRODUCT_TEXT_MAX_LENGTH)
+      .nullable()
+      .optional(),
     imageUrl: z.union([z.null(), productImageUrlSchema]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -56,6 +63,8 @@ export const listProductsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   productType: emptyToUndefined(z.enum(PRODUCT_TYPES).optional()),
   status: emptyToUndefined(z.enum(PRODUCT_STATUSES).optional()),
-  brand: emptyToUndefined(z.string().trim().min(1).max(100).optional()),
+  brand: emptyToUndefined(
+    z.string().trim().min(1).max(PRODUCT_TEXT_MAX_LENGTH).optional()
+  ),
   search: emptyToUndefined(z.string().trim().min(1).max(200).optional()),
 });
