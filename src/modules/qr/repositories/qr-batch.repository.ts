@@ -1,4 +1,10 @@
 import pool from '../../../database/connection';
+import {
+  DEFAULT_QR_LABEL_COLOR,
+  DEFAULT_QR_LABEL_SHAPE,
+  QrLabelColor,
+  QrLabelShape,
+} from '../constants/qr-label.constants';
 import { IQrBatch, QrBatchStatus } from '../types/qr.types';
 
 interface QrBatchRow {
@@ -7,13 +13,15 @@ interface QrBatchRow {
   total_qrs: number;
   generated_count: number;
   product_id: string | null;
-  description: string | null;
   wallet_amount: string | number;
   reward_points: number;
   start_date: Date | null;
   end_date: Date | null;
   active: boolean;
   status: QrBatchStatus;
+  label_shape: QrLabelShape;
+  label_color: QrLabelColor;
+  created_by: string | null;
   created_at: Date;
   updated_at: Date;
   product_sku_code?: string | null;
@@ -24,15 +32,15 @@ interface QrBatchRow {
 }
 
 const BATCH_COLUMNS = `
-  b.id, b.name, b.total_qrs, b.generated_count, b.product_id, b.description,
+  b.id, b.name, b.total_qrs, b.generated_count, b.product_id,
   b.wallet_amount, b.reward_points, b.start_date, b.end_date, b.active,
-  b.status, b.created_at, b.updated_at
+  b.status, b.label_shape, b.label_color, b.created_by, b.created_at, b.updated_at
 `;
 
 const BATCH_RETURNING = `
-  id, name, total_qrs, generated_count, product_id, description,
+  id, name, total_qrs, generated_count, product_id,
   wallet_amount, reward_points, start_date, end_date, active,
-  status, created_at, updated_at
+  status, label_shape, label_color, created_by, created_at, updated_at
 `;
 
 export function mapQrBatchRow(row: QrBatchRow): IQrBatch {
@@ -42,13 +50,15 @@ export function mapQrBatchRow(row: QrBatchRow): IQrBatch {
     totalQrs: row.total_qrs,
     generatedCount: row.generated_count,
     productId: row.product_id ?? undefined,
-    description: row.description ?? undefined,
     walletAmount: Number(row.wallet_amount),
     rewardPoints: row.reward_points,
     startDate: row.start_date ?? undefined,
     endDate: row.end_date ?? undefined,
     active: row.active,
     status: row.status,
+    labelShape: row.label_shape ?? DEFAULT_QR_LABEL_SHAPE,
+    labelColor: row.label_color ?? DEFAULT_QR_LABEL_COLOR,
+    createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -77,7 +87,6 @@ export interface CreateQrBatchData {
   name: string;
   totalQrs: number;
   productId: string;
-  description?: string;
   walletAmount: number;
   rewardPoints: number;
   startDate?: string;
@@ -85,28 +94,34 @@ export interface CreateQrBatchData {
   active?: boolean;
   generatedCount?: number;
   status?: QrBatchStatus;
+  labelShape: QrLabelShape;
+  labelColor: QrLabelColor;
+  createdBy?: string;
 }
 
 export const qrBatchRepository = {
   create: async (data: CreateQrBatchData): Promise<IQrBatch> => {
     const result = await pool.query<QrBatchRow>(
       `INSERT INTO qr_batches
-         (name, total_qrs, generated_count, product_id, description,
-          wallet_amount, reward_points, start_date, end_date, active, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (name, total_qrs, generated_count, product_id,
+          wallet_amount, reward_points, start_date, end_date, active, status,
+          label_shape, label_color, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${BATCH_RETURNING}`,
       [
         data.name,
         data.totalQrs,
         data.generatedCount ?? 0,
         data.productId,
-        data.description ?? null,
         data.walletAmount,
         data.rewardPoints,
         data.startDate ?? null,
         data.endDate ?? null,
         data.active ?? true,
         data.status ?? QrBatchStatus.DRAFT,
+        data.labelShape,
+        data.labelColor,
+        data.createdBy ?? null,
       ]
     );
     return mapQrBatchRow(result.rows[0]);

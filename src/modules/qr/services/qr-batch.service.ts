@@ -4,6 +4,10 @@ import { productRepository } from '../../products/repositories/product.repositor
 import { qrBatchRepository } from '../repositories/qr-batch.repository';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
 import {
+  DEFAULT_QR_LABEL_COLOR,
+  DEFAULT_QR_LABEL_SHAPE,
+} from '../constants/qr-label.constants';
+import {
   CouponDisplayStatus,
   CreateBatchInput,
   IQrBatch,
@@ -52,7 +56,6 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
     productName: batch.product?.name ?? '',
     productSku: batch.product?.skuCode ?? '',
     productImageUrl: batch.product?.imageUrl,
-    description: batch.description,
     generated: stats.generated,
     redeemed: stats.redeemed,
     pending: stats.pending,
@@ -61,6 +64,8 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
     totalQrs: batch.totalQrs,
     walletAmount: batch.walletAmount,
     rewardPoints: batch.rewardPoints,
+    shape: batch.labelShape,
+    color: batch.labelColor,
     startDate: formatDate(batch.startDate),
     endDate: formatDate(batch.endDate),
     createdAt: batch.createdAt,
@@ -100,7 +105,6 @@ export class QrBatchService {
       name: batchName,
       totalQrs: input.totalQrs,
       productId: input.productId,
-      description: input.description,
       walletAmount: input.walletAmount,
       rewardPoints: input.rewardPoints,
       startDate: input.startDate,
@@ -108,6 +112,9 @@ export class QrBatchService {
       active: input.status !== 'inactive',
       generatedCount: 0,
       status: QrBatchStatus.DRAFT,
+      labelShape: input.shape ?? DEFAULT_QR_LABEL_SHAPE,
+      labelColor: input.color ?? DEFAULT_QR_LABEL_COLOR,
+      createdBy: input.createdBy,
     });
 
     const batchWithProduct = await qrBatchRepository.findById(batch._id);

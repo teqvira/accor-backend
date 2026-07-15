@@ -12,7 +12,10 @@ import { parseQrExportFormat } from '../utils/parse-export-format';
 
 export class QrController {
   async createBatch(req: AuthRequest, res: Response): Promise<void> {
-    const batch = await qrBatchService.createBatch(req.body);
+    const batch = await qrBatchService.createBatch({
+      ...req.body,
+      createdBy: req.user?.sub,
+    });
     sendSuccess(res, 'QR batch created successfully', { batch }, 201);
   }
 
@@ -66,6 +69,8 @@ export class QrController {
       batchName: batch.batchName,
       batchId,
       productSku: batch.productSku,
+      shape: batch.shape,
+      color: batch.color,
       format,
       limit,
     });

@@ -13,10 +13,10 @@ interface RewardTransactionRow {
   user_id: string;
   points: number;
   type: RewardTransactionType;
+  reference_type: IRewardTransaction['referenceType'] | null;
   reference_id: string | null;
-  description: string | null;
+  remarks: string | null;
   created_at: Date;
-  updated_at: Date;
 }
 
 export function mapRewardTransactionRow(
@@ -27,15 +27,15 @@ export function mapRewardTransactionRow(
     userId: row.user_id,
     points: row.points,
     type: row.type,
+    referenceType: row.reference_type ?? undefined,
     referenceId: row.reference_id ?? undefined,
-    description: row.description ?? undefined,
+    remarks: row.remarks ?? undefined,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
 const TX_COLUMNS = `
-  id, user_id, points, type, reference_id, description, created_at, updated_at
+  id, user_id, points, type, reference_type, reference_id, remarks, created_at
 `;
 
 export const rewardTransactionRepository = {
@@ -46,15 +46,16 @@ export const rewardTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<RewardTransactionRow>(
       `INSERT INTO reward_transactions
-         (user_id, points, type, reference_id, description)
-       VALUES ($1, $2, $3, $4, $5)
+         (user_id, points, type, reference_type, reference_id, remarks)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
         data.points,
         data.type,
+        data.referenceType ?? null,
         data.referenceId ?? null,
-        data.description ?? null,
+        data.remarks ?? null,
       ]
     );
     return mapRewardTransactionRow(result.rows[0]);

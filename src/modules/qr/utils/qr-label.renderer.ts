@@ -1,56 +1,47 @@
 import QRCode from 'qrcode';
 import { buildQrPayload } from '../services/qr-generation.service';
+import {
+  DEFAULT_QR_LABEL_COLOR,
+  DEFAULT_QR_LABEL_SHAPE,
+  QR_LABEL_COLOR_HEX,
+  QR_LABEL_DIMENSIONS,
+  QR_LABEL_TAGLINE,
+  QrLabelColor,
+  QrLabelShape,
+} from '../constants/qr-label.constants';
 import { qrLabelAssetPaths } from './qr-label.paths';
 
-export const QR_LABEL_SIZE = 136;
-export const QR_CODE_SIZE = 60;
-
-const GRADIENT_TOP = '#FFFF20';
-const GRADIENT_BOTTOM = '#50CC74';
-const TEXT_GREEN = '#004D00';
-
-const LOGO_SIZE = 35;
-const SIDE_ICON_SIZE = 12;
-const META_FONT_SIZE = 4;
-const BODY_FONT_SIZE = 5;
-const BODY_LINE = 5;
-const QR_BG_PAD = 3;
-const QR_TO_SCAN_GAP = 9;
+const TEXT_WHITE = '#FFFFFF';
+const QR_DARK = '#000000';
+const QR_LIGHT = '#FFFFFF';
 
 export interface QrLabelMetadata {
   batchId: string;
   batchName: string;
   productSku?: string;
+  shape?: QrLabelShape;
+  color?: QrLabelColor;
 }
 
-async function createQrImageBuffer(code: string): Promise<Buffer> {
+export function getLabelSize(shape: QrLabelShape): {
+  width: number;
+  height: number;
+} {
+  return QR_LABEL_DIMENSIONS[shape];
+}
+
+async function createQrImageBuffer(code: string, size: number): Promise<Buffer> {
   const payload = buildQrPayload(code);
   return QRCode.toBuffer(payload, {
     type: 'png',
-    width: QR_CODE_SIZE,
+    width: size,
     margin: 1,
+    errorCorrectionLevel: 'M',
     color: {
-      dark: '#000000',
-      light: '#FFFFFF',
+      dark: QR_DARK,
+      light: QR_LIGHT,
     },
   });
-}
-
-function drawGradientCircle(
-  doc: PDFKit.PDFDocument,
-  cx: number,
-  cy: number,
-  radius: number
-): void {
-  doc.save();
-  doc.circle(cx, cy, radius).clip();
-
-  const gradient = doc.linearGradient(cx, cy - radius, cx, cy + radius);
-  gradient.stop(0, GRADIENT_TOP);
-  gradient.stop(1, GRADIENT_BOTTOM);
-  doc.circle(cx, cy, radius).fill(gradient);
-
-  doc.restore();
 }
 
 function drawText(
@@ -64,13 +55,224 @@ function drawText(
     bold?: boolean;
     color?: string;
     fontSize?: number;
+    lineGap?: number;
   } = {}
 ): void {
   doc
     .font(options.bold ? 'Helvetica-Bold' : 'Helvetica')
-    .fontSize(options.fontSize ?? BODY_FONT_SIZE)
-    .fillColor(options.color ?? TEXT_GREEN)
-    .text(text, leftX, topY, { width, align: options.align ?? 'center' });
+    .fontSize(options.fontSize ?? 4)
+    .fillColor(options.color ?? TEXT_WHITE)
+    .text(text, leftX, topY, {
+      width,
+      align: options.align ?? 'center',
+      lineGap: options.lineGap ?? 0,
+    });
+}
+
+function fillCapBackground(
+  doc: PDFKit.PDFDocument,
+  cx: number,
+  cy: number,
+  radius: number,
+  colorHex: string
+): void {
+  doc.circle(cx, cy, radius).fill(colorHex);
+}
+
+function fillSquareBackground(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  colorHex: string
+): void {
+  const radius = Math.min(width, height) * 0.08;
+  doc.roundedRect(x, y, width, height, radius).fill(colorHex);
+}
+
+function drawAccorMark(
+  doc: PDFKit.PDFDocument,
+  cx: number,
+  topY: number,
+  markHeight: number
+): void {
+  const iconSize = markHeight * 0.55;
+  doc.image(qrLabelAssetPaths.appIcon, cx - iconSize / 2, topY, {
+    width: iconSize,
+    height: iconSize,
+  });
+}
+
+function drawWhiteQrPlate(
+  doc: PDFKit.PDFDocument,
+  qrX: number,
+  qrY: number,
+  qrSize: number,
+  pad: number
+): void {
+  const bg = qrSize + pad * 2;
+  doc.roundedRect(qrX - pad, qrY - pad, bg, bg, Math.max(1.5, pad * 0.6)).fill('#FFFFFF');
+}
+
+async function drawCapLabel(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  code: string,
+  metadata: QrLabelMetadata,
+  colorHex: string
+): Promise<void> {
+  const { width: size } = getLabelSize('cap');
+  const radius = size / 2;
+  const cx = x + radius;
+  const cy = y + radius;
+
+  fillCapBackground(doc, cx, cy, radius, colorHex);
+
+  doc.save();
+  doc.circle(cx, cy, radius).clip();
+
+  // Proportions tuned to the 1" Cap design mock
+  const logoSize = size * 0.22;
+  const logoY = y + size * 0.04;
+  doc.image(qrLabelAssetPaths.appIcon, cx - logoSize / 2, logoY, {
+    width: logoSize,
+    height: logoSize,
+  });
+
+  const metaFont = 3.2;
+  const metaY = logoY + logoSize + size * 0.01;
+  const batchLabel = metadata.batchName || metadata.batchId;
+  const skuLabel = metadata.productSku ?? 'N/A';
+  drawText(doc, `${batchLabel}   ${skuLabel}`, x + 4, metaY, size - 8, {
+    bold: true,
+    fontSize: metaFont,
+    color: TEXT_WHITE,
+  });
+
+  const qrSize = Math.round(size * 0.38);
+  const qrPad = size * 0.025;
+  const qrX = cx - qrSize / 2;
+  const qrY = metaY + metaFont + size * 0.02;
+
+  drawWhiteQrPlate(doc, qrX, qrY, qrSize, qrPad);
+  const qrBuffer = await createQrImageBuffer(code, qrSize);
+  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+
+  const gutterW = (qrX - x) * 0.9;
+  const leftCx = x + (qrX - x) / 2;
+  const rightCx = qrX + qrSize + (x + size - qrX - qrSize) / 2;
+  const iconSize = size * 0.09;
+  const sideIconY = qrY + qrSize * 0.22;
+  const sideTextY = sideIconY + iconSize + 0.5;
+  const sideFont = 2.8;
+
+  doc.image(
+    qrLabelAssetPaths.shieldIcon,
+    leftCx - iconSize / 2,
+    sideIconY,
+    { width: iconSize, height: iconSize }
+  );
+  doc.image(
+    qrLabelAssetPaths.trustIcon,
+    rightCx - iconSize / 2,
+    sideIconY,
+    { width: iconSize, height: iconSize }
+  );
+
+  drawText(doc, '100%\nGENUINE', leftCx - gutterW / 2, sideTextY, gutterW, {
+    bold: true,
+    fontSize: sideFont,
+    color: TEXT_WHITE,
+    lineGap: -0.5,
+  });
+  drawText(doc, 'TRUSTED\nQUALITY', rightCx - gutterW / 2, sideTextY, gutterW, {
+    bold: true,
+    fontSize: sideFont,
+    color: TEXT_WHITE,
+    lineGap: -0.5,
+  });
+
+  const ctaY = qrY + qrSize + qrPad + size * 0.035;
+  drawText(doc, 'Scan To Redeem', x + 6, ctaY, size - 12, {
+    bold: true,
+    fontSize: 3.6,
+    color: TEXT_WHITE,
+  });
+  drawText(doc, 'T&C Applied*', x + 6, ctaY + 4.2, size - 12, {
+    fontSize: 2.4,
+    color: TEXT_WHITE,
+  });
+
+  doc.restore();
+}
+
+async function drawSquareLabel(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  code: string,
+  metadata: QrLabelMetadata,
+  colorHex: string
+): Promise<void> {
+  const { width, height } = getLabelSize('square');
+
+  fillSquareBackground(doc, x, y, width, height, colorHex);
+
+  doc.save();
+  const clipR = Math.min(width, height) * 0.08;
+  doc.roundedRect(x, y, width, height, clipR).clip();
+
+  // Left brand column (~42%), right QR column (~58%) — matches Square QR Design
+  const leftW = width * 0.42;
+  const rightX = x + leftW;
+  const rightW = width - leftW;
+
+  const logoH = height * 0.55;
+  const logoTop = y + height * 0.08;
+  drawAccorMark(doc, x + leftW / 2, logoTop, logoH);
+
+  const taglineY = logoTop + logoH + 1;
+  drawText(doc, QR_LABEL_TAGLINE, x + 3, taglineY, leftW - 6, {
+    bold: true,
+    fontSize: 2.6,
+    color: TEXT_WHITE,
+  });
+
+  const batchLabel = metadata.batchName || metadata.batchId;
+  const skuLabel = metadata.productSku ?? 'N/A';
+  const metaY = y + height * 0.06;
+  drawText(doc, `${batchLabel}   ${skuLabel}`, rightX, metaY, rightW - 4, {
+    bold: true,
+    fontSize: 3.2,
+    color: TEXT_WHITE,
+    align: 'center',
+  });
+
+  const qrSize = Math.round(Math.min(rightW * 0.62, height * 0.52));
+  const qrPad = 1.8;
+  const qrX = rightX + (rightW - qrSize) / 2 - 1;
+  const qrY = metaY + 5;
+
+  drawWhiteQrPlate(doc, qrX, qrY, qrSize, qrPad);
+  const qrBuffer = await createQrImageBuffer(code, qrSize);
+  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+
+  const ctaY = qrY + qrSize + qrPad + 2;
+  drawText(doc, 'Scan To Redeem', rightX, ctaY, rightW - 4, {
+    bold: true,
+    fontSize: 3.4,
+    color: TEXT_WHITE,
+    align: 'center',
+  });
+  drawText(doc, 'T&C Applied*', rightX, ctaY + 4, rightW - 6, {
+    fontSize: 2.2,
+    color: TEXT_WHITE,
+    align: 'right',
+  });
+
+  doc.restore();
 }
 
 export async function drawQrLabel(
@@ -80,101 +282,18 @@ export async function drawQrLabel(
   code: string,
   metadata: QrLabelMetadata
 ): Promise<void> {
-  const radius = QR_LABEL_SIZE / 2;
-  const cx = x + radius;
-  const circleCy = y + radius;
+  const shape = metadata.shape ?? DEFAULT_QR_LABEL_SHAPE;
+  const colorKey = metadata.color ?? DEFAULT_QR_LABEL_COLOR;
+  const colorHex = QR_LABEL_COLOR_HEX[colorKey];
 
-  drawGradientCircle(doc, cx, circleCy, radius);
+  if (shape === 'square') {
+    await drawSquareLabel(doc, x, y, code, metadata, colorHex);
+    return;
+  }
 
-  doc.save();
-  doc.circle(cx, circleCy, radius).clip();
-
-  const qrX = cx - QR_CODE_SIZE / 2;
-  const leftGutterCx = x + (qrX - x) / 2;
-  const rightGutterCx = qrX + QR_CODE_SIZE + (x + QR_LABEL_SIZE - qrX - QR_CODE_SIZE) / 2;
-  const gutterWidth = 28;
-
-  // ── Logo (35×35) ──────────────────────────────────────────────────────────
-  const logoY = y + 3;
-  doc.image(qrLabelAssetPaths.appIcon, cx - LOGO_SIZE / 2, logoY, {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
-  });
-
-  // ── QR (60×60) — main anchor, placed right below logo ─────────────────────
-  const qrY = logoY + LOGO_SIZE + 2;
-  const qrBgSize = QR_CODE_SIZE + QR_BG_PAD * 2;
-
-  doc
-    .roundedRect(qrX - QR_BG_PAD, qrY - QR_BG_PAD, qrBgSize, qrBgSize, 4)
-    .fill('#FFFFFF');
-
-  const qrBuffer = await createQrImageBuffer(code);
-  doc.image(qrBuffer, qrX, qrY, { width: QR_CODE_SIZE, height: QR_CODE_SIZE });
-
-  // ── Batch / SKU — smaller text, flanking top of QR in side gutters ────────
-  const batchLabel = metadata.batchName || metadata.batchId;
-  const skuLabel = metadata.productSku ?? 'N/A';
-  const metaY = qrY + 2;
-
-  drawText(doc, batchLabel, leftGutterCx - gutterWidth / 2, metaY, gutterWidth, {
-    bold: true,
-    fontSize: META_FONT_SIZE,
-  });
-  drawText(doc, skuLabel, rightGutterCx - gutterWidth / 2, metaY, gutterWidth, {
-    bold: true,
-    fontSize: META_FONT_SIZE,
-  });
-
-  // ── Side shields + labels — in gutters, lower half beside QR ──────────────
-  const sideIconY = qrY + 20;
-  const sideTextY = sideIconY + SIDE_ICON_SIZE + 1;
-  const sideTextWidth = 26;
-
-  doc.image(
-    qrLabelAssetPaths.shieldIcon,
-    leftGutterCx - SIDE_ICON_SIZE / 2,
-    sideIconY,
-    { width: SIDE_ICON_SIZE, height: SIDE_ICON_SIZE }
-  );
-  doc.image(
-    qrLabelAssetPaths.trustIcon,
-    rightGutterCx - SIDE_ICON_SIZE / 2,
-    sideIconY,
-    { width: SIDE_ICON_SIZE, height: SIDE_ICON_SIZE }
-  );
-
-  drawText(doc, '100%', leftGutterCx - sideTextWidth / 2, sideTextY, sideTextWidth, {
-    bold: true,
-    fontSize: BODY_FONT_SIZE,
-  });
-  drawText(doc, 'GENUINE', leftGutterCx - sideTextWidth / 2, sideTextY + BODY_LINE, sideTextWidth, {
-    bold: true,
-    fontSize: BODY_FONT_SIZE,
-  });
-
-  drawText(doc, 'TRUSTED', rightGutterCx - sideTextWidth / 2, sideTextY, sideTextWidth, {
-    bold: true,
-    fontSize: BODY_FONT_SIZE,
-  });
-  drawText(doc, 'QUALITY', rightGutterCx - sideTextWidth / 2, sideTextY + BODY_LINE, sideTextWidth, {
-    bold: true,
-    fontSize: BODY_FONT_SIZE,
-  });
-
-  // ── Bottom CTA — gap measured from white QR border, not QR image edge ─────
-  const bottomY = qrY + QR_CODE_SIZE + QR_BG_PAD + QR_TO_SCAN_GAP;
-  const bottomWidth = QR_LABEL_SIZE - 24;
-
-  drawText(doc, 'Scan To Redeem', cx - bottomWidth / 2, bottomY, bottomWidth, {
-    bold: true,
-    color: '#000000',
-    fontSize: BODY_FONT_SIZE,
-  });
-  drawText(doc, '*T&C Applied*', cx - bottomWidth / 2, bottomY + BODY_LINE + 1, bottomWidth, {
-    color: '#000000',
-    fontSize: META_FONT_SIZE,
-  });
-
-  doc.restore();
+  await drawCapLabel(doc, x, y, code, metadata, colorHex);
 }
+
+/** @deprecated Use getLabelSize('cap').width — kept for any external imports */
+export const QR_LABEL_SIZE = QR_LABEL_DIMENSIONS.cap.width;
+export const QR_CODE_SIZE = Math.round(QR_LABEL_DIMENSIONS.cap.width * 0.38);

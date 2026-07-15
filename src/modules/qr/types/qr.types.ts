@@ -1,3 +1,8 @@
+import {
+  QrLabelColor,
+  QrLabelShape,
+} from '../constants/qr-label.constants';
+
 export enum QrBatchStatus {
   DRAFT = 'draft',
   GENERATED = 'generated',
@@ -11,13 +16,15 @@ export interface IQrBatch {
   totalQrs: number;
   generatedCount: number;
   productId?: string;
-  description?: string;
   walletAmount: number;
   rewardPoints: number;
   startDate?: Date;
   endDate?: Date;
   active: boolean;
   status: QrBatchStatus;
+  labelShape: QrLabelShape;
+  labelColor: QrLabelColor;
+  createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
   product?: {
@@ -42,18 +49,19 @@ export interface IQrCode {
   redeemedBy?: string;
   redeemedAt?: Date;
   createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface CreateBatchInput {
   productId: string;
   totalQrs: number;
-  description?: string;
   walletAmount: number;
   rewardPoints: number;
   startDate?: string;
   endDate?: string;
   status?: 'active' | 'inactive';
+  shape?: QrLabelShape;
+  color?: QrLabelColor;
+  createdBy?: string;
 }
 
 export interface QrCodeListFilters {
@@ -67,7 +75,6 @@ export interface QrBatchListItem {
   productName: string;
   productSku: string;
   productImageUrl?: string;
-  description?: string;
   generated: number;
   redeemed: number;
   pending: number;
@@ -76,6 +83,8 @@ export interface QrBatchListItem {
   totalQrs: number;
   walletAmount: number;
   rewardPoints: number;
+  shape: QrLabelShape;
+  color: QrLabelColor;
   startDate?: string;
   endDate?: string;
   createdAt: Date;

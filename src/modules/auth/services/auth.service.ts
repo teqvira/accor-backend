@@ -10,6 +10,10 @@ import {
   UnauthorizedError,
 } from '../../../shared/utils/errors';
 import { isPgUniqueViolation } from '../../../shared/utils/postgres';
+import {
+  OtpPurpose,
+  otpVerificationRepository,
+} from '../repositories/otp-verification.repository';
 import { refreshTokenRepository } from '../repositories/refresh-token.repository';
 import { userRepository } from '../repositories/user.repository';
 import { JwtAccessPayload } from '../types/auth.types';
@@ -81,24 +85,44 @@ async function issueTokenPair(user: IUser) {
   return { accessToken, refreshToken };
 }
 
-async function setUserOtp(userId: string, otp: string): Promise<void> {
-  const otpHash = hashOtp(otp);
-  const otpExpiresAt = new Date(
-    Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000
-  );
-  const otpLastSentAt = new Date();
-  await userRepository.updateOtp(userId, otpHash, otpExpiresAt, otpLastSentAt);
+async function issueOtp(params: {
+  mobileNumber?: string | null;
+  email?: string | null;
+  purpose: OtpPurpose;
+  otp: string;
+}): Promise<void> {
+  const filters = {
+    mobileNumber: params.mobileNumber ?? undefined,
+    email: params.email ?? undefined,
+    purpose: params.purpose,
+  };
+
+  await otpVerificationRepository.invalidateActive(filters);
+
+  await otpVerificationRepository.create({
+    mobileNumber: params.mobileNumber,
+    email: params.email,
+    otpHash: hashOtp(params.otp),
+    purpose: params.purpose,
+    expiresAt: new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000),
+  });
 }
 
-function assertOtpResendAllowed(user: IUser): void {
-  if (!user.otpLastSentAt) return;
-  const elapsed = Date.now() - user.otpLastSentAt.getTime();
+async function assertOtpResendAllowed(filters: {
+  mobileNumber?: string;
+  email?: string;
+  purpose: OtpPurpose;
+}): Promise<void> {
+  const latest = await otpVerificationRepository.findLatest(filters);
+  if (!latest) return;
+
+  const elapsed = Date.now() - latest.createdAt.getTime();
   const cooldown = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
   if (elapsed < cooldown) {
     const waitSeconds = Math.ceil((cooldown - elapsed) / 1000);
     throw new BadRequestError(
       `Please wait ${waitSeconds} seconds before requesting a new OTP`,
-      `OTP resend cooldown active for userId=${user._id}`
+      `OTP resend cooldown active purpose=${filters.purpose}`
     );
   }
 }
@@ -198,9 +222,7 @@ export class AuthService {
 
   async sendMobileOtp(mobileNumber: string, loggedInUserId?: string) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    let user = await userRepository.findByMobile(mobileNumber, {
-      includeOtp: true,
-    });
+    let user = await userRepository.findByMobile(mobileNumber);
 
     if (!user) {
       try {
@@ -209,19 +231,12 @@ export class AuthService {
           role: UserRole.USER,
           name: `User ${mobileNumber.slice(-4)}`,
         });
-        user = await userRepository.findByMobile(mobileNumber, {
-          includeOtp: true,
-        });
-        if (!user) {
-          user = created;
-        }
+        user = (await userRepository.findByMobile(mobileNumber)) ?? created;
       } catch (err: unknown) {
         if (!isPgUniqueViolation(err)) {
           throw err;
         }
-        user = await userRepository.findByMobile(mobileNumber, {
-          includeOtp: true,
-        });
+        user = await userRepository.findByMobile(mobileNumber);
       }
     }
 
@@ -239,10 +254,10 @@ export class AuthService {
       );
     }
 
-    assertOtpResendAllowed(user);
+    await assertOtpResendAllowed({ mobileNumber, purpose: 'login' });
 
     const otp = generateOtp();
-    await setUserOtp(user._id, otp);
+    await issueOtp({ mobileNumber, purpose: 'login', otp });
     await sendOtpSms(mobileNumber, otp);
 
     return { message: 'OTP sent successfully' };
@@ -258,32 +273,28 @@ export class AuthService {
     loggedInUserId?: string
   ) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    const user = await userRepository.findByMobile(mobileNumber, {
-      includeOtp: true,
+    const user = await userRepository.findByMobile(mobileNumber);
+    const otpRecord = await otpVerificationRepository.findLatestActive({
+      mobileNumber,
+      purpose: 'login',
     });
 
-    if (!user?.otpHash || !user.otpExpiresAt) {
+    if (!user || !otpRecord) {
       throw new BadRequestError(
         'No OTP request found. Please request a new OTP',
         `verifyMobileOtp: missing otp for mobile=${mobileNumber}`
       );
     }
 
-    if (user.otpExpiresAt < new Date()) {
-      throw new BadRequestError(
-        'Your OTP has expired. Please request a new one',
-        `verifyMobileOtp: OTP expired for userId=${user._id}`
-      );
-    }
-
-    if (!verifyOtpHash(otp, user.otpHash)) {
+    if (!verifyOtpHash(otp, otpRecord.otpHash)) {
       throw new BadRequestError(
         'The OTP you entered is incorrect',
         `verifyMobileOtp: OTP mismatch for userId=${user._id}`
       );
     }
 
-    const verifiedUser = await userRepository.clearOtpAndVerify(user._id);
+    await otpVerificationRepository.markVerified(otpRecord._id);
+    const verifiedUser = await userRepository.markVerified(user._id);
     if (!verifiedUser) {
       throw new BadRequestError(
         'Unable to process request',
@@ -366,8 +377,10 @@ export class AuthService {
       return { message: 'If the email exists, an OTP has been sent' };
     }
 
+    await assertOtpResendAllowed({ email, purpose: 'password_reset' });
+
     const otp = generateOtp();
-    await setUserOtp(user._id, otp);
+    await issueOtp({ email, purpose: 'password_reset', otp });
     if (user.email) {
       await sendOtpEmail(user.email, otp);
     }
@@ -376,30 +389,27 @@ export class AuthService {
   }
 
   async verifyPasswordOtp(email: string, otp: string) {
-    const user = await userRepository.findByEmail(email, { includeOtp: true });
+    const user = await userRepository.findByEmail(email);
+    const otpRecord = await otpVerificationRepository.findLatestActive({
+      email,
+      purpose: 'password_reset',
+    });
 
-    if (!user?.otpHash || !user.otpExpiresAt) {
+    if (!user || !otpRecord) {
       throw new BadRequestError(
         'No password reset request found. Please request a new OTP',
-        `verifyPasswordOtp: missing otpHash or otpExpiresAt for email=${email}`
+        `verifyPasswordOtp: missing otp for email=${email}`
       );
     }
 
-    if (user.otpExpiresAt < new Date()) {
-      throw new BadRequestError(
-        'Your OTP has expired. Please request a new one',
-        `verifyPasswordOtp: OTP expired at ${user.otpExpiresAt.toISOString()} for userId=${user._id}`
-      );
-    }
-
-    if (!verifyOtpHash(otp, user.otpHash)) {
+    if (!verifyOtpHash(otp, otpRecord.otpHash)) {
       throw new BadRequestError(
         'The OTP you entered is incorrect',
         `verifyPasswordOtp: OTP hash mismatch for userId=${user._id}`
       );
     }
 
-    await userRepository.clearOtp(user._id);
+    await otpVerificationRepository.markVerified(otpRecord._id);
 
     const resetToken = signResetToken({
       sub: user._id,

@@ -11,44 +11,65 @@ type Queryable = Pick<PoolClient, 'query'>;
 interface WithdrawalRow {
   id: string;
   user_id: string;
+  payout_profile_id: string;
   amount: string | number;
-  method: PayoutMethod;
   status: WithdrawalStatus;
-  provider: string;
+  transaction_reference: string | null;
+  remarks: string | null;
+  provider: string | null;
   provider_payout_id: string | null;
-  provider_reference_id: string;
-  failure_reason: string | null;
-  payout_destination: unknown;
+  requested_at: Date;
+  processed_at: Date | null;
   created_at: Date;
-  updated_at: Date;
+  account_type?: PayoutMethod | null;
+  upi_id?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
 }
 
-function parsePayoutDestination(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return '';
-  return String(value);
+function resolvePayoutDestination(row: WithdrawalRow): string {
+  if (row.account_type === PayoutMethod.UPI) {
+    return row.upi_id ?? '';
+  }
+  if (row.account_number || row.ifsc_code) {
+    const masked =
+      row.account_number && row.account_number.length > 4
+        ? `****${row.account_number.slice(-4)}`
+        : '****';
+    return `${masked}@${row.ifsc_code ?? ''}`;
+  }
+  return '';
 }
 
 export function mapWithdrawalRow(row: WithdrawalRow): IWithdrawal {
   return {
     _id: row.id,
     userId: row.user_id,
+    payoutProfileId: row.payout_profile_id,
     amount: Number(row.amount),
-    method: row.method,
+    method: row.account_type ?? PayoutMethod.UPI,
     status: row.status,
-    provider: row.provider as IWithdrawal['provider'],
+    provider: (row.provider as IWithdrawal['provider']) ?? undefined,
     providerPayoutId: row.provider_payout_id ?? undefined,
-    providerReferenceId: row.provider_reference_id,
-    failureReason: row.failure_reason ?? undefined,
-    payoutDestination: parsePayoutDestination(row.payout_destination),
+    providerReferenceId: row.transaction_reference ?? '',
+    failureReason: row.remarks ?? undefined,
+    payoutDestination: resolvePayoutDestination(row),
+    requestedAt: row.requested_at,
+    processedAt: row.processed_at ?? undefined,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
 const WITHDRAWAL_COLUMNS = `
-  id, user_id, amount, method, status, provider, provider_payout_id,
-  provider_reference_id, failure_reason, payout_destination, created_at, updated_at
+  w.id, w.user_id, w.payout_profile_id, w.amount, w.status,
+  w.transaction_reference, w.remarks, w.provider, w.provider_payout_id,
+  w.requested_at, w.processed_at, w.created_at,
+  p.account_type, p.upi_id, p.account_number, p.ifsc_code
+`;
+
+const WITHDRAWAL_FROM = `
+  FROM withdrawals w
+  LEFT JOIN payout_profiles p ON p.id = w.payout_profile_id
 `;
 
 export const withdrawalRepository = {
@@ -58,18 +79,26 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal> => {
     const db = client ?? pool;
     const result = await db.query<WithdrawalRow>(
-      `INSERT INTO withdrawals
-         (user_id, amount, method, status, provider, provider_reference_id, payout_destination)
-       VALUES ($1, $2, $3, $4, $5, $6, to_jsonb($7::text))
-       RETURNING ${WITHDRAWAL_COLUMNS}`,
+      `WITH inserted AS (
+         INSERT INTO withdrawals
+           (user_id, payout_profile_id, amount, status, provider, transaction_reference)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *
+       )
+       SELECT
+         i.id, i.user_id, i.payout_profile_id, i.amount, i.status,
+         i.transaction_reference, i.remarks, i.provider, i.provider_payout_id,
+         i.requested_at, i.processed_at, i.created_at,
+         p.account_type, p.upi_id, p.account_number, p.ifsc_code
+       FROM inserted i
+       LEFT JOIN payout_profiles p ON p.id = i.payout_profile_id`,
       [
         data.userId,
+        data.payoutProfileId,
         data.amount,
-        data.method,
         data.status,
-        data.provider,
+        data.provider ?? null,
         data.providerReferenceId,
-        data.payoutDestination,
       ]
     );
     return mapWithdrawalRow(result.rows[0]);
@@ -81,7 +110,7 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal | null> => {
     const db = client ?? pool;
     const result = await db.query<WithdrawalRow>(
-      `SELECT ${WITHDRAWAL_COLUMNS} FROM withdrawals WHERE id = $1`,
+      `SELECT ${WITHDRAWAL_COLUMNS} ${WITHDRAWAL_FROM} WHERE w.id = $1`,
       [id]
     );
     return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
@@ -96,9 +125,9 @@ export const withdrawalRepository = {
     const [itemsResult, countResult] = await Promise.all([
       pool.query<WithdrawalRow>(
         `SELECT ${WITHDRAWAL_COLUMNS}
-         FROM withdrawals
-         WHERE user_id = $1
-         ORDER BY created_at DESC
+         ${WITHDRAWAL_FROM}
+         WHERE w.user_id = $1
+         ORDER BY w.created_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset]
       ),
@@ -118,9 +147,9 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal | null> => {
     const result = await pool.query<WithdrawalRow>(
       `SELECT ${WITHDRAWAL_COLUMNS}
-       FROM withdrawals
-       WHERE user_id = $1
-         AND status IN ($2, $3)
+       ${WITHDRAWAL_FROM}
+       WHERE w.user_id = $1
+         AND w.status IN ($2, $3)
        LIMIT 1`,
       [userId, WithdrawalStatus.PENDING, WithdrawalStatus.PROCESSING]
     );
@@ -132,8 +161,8 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal | null> => {
     const result = await pool.query<WithdrawalRow>(
       `SELECT ${WITHDRAWAL_COLUMNS}
-       FROM withdrawals
-       WHERE provider_reference_id = $1`,
+       ${WITHDRAWAL_FROM}
+       WHERE w.transaction_reference = $1`,
       [providerReferenceId]
     );
     return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
@@ -144,8 +173,8 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal | null> => {
     const result = await pool.query<WithdrawalRow>(
       `SELECT ${WITHDRAWAL_COLUMNS}
-       FROM withdrawals
-       WHERE provider_reference_id = $1 OR provider_payout_id = $1`,
+       ${WITHDRAWAL_FROM}
+       WHERE w.transaction_reference = $1 OR w.provider_payout_id = $1`,
       [transferId]
     );
     return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
@@ -165,14 +194,17 @@ export const withdrawalRepository = {
     client?: Queryable
   ): Promise<IWithdrawal | null> => {
     const db = client ?? pool;
-    const result = await db.query<WithdrawalRow>(
+    await db.query(
       `UPDATE withdrawals
-       SET status = $2, updated_at = NOW()
-       WHERE id = $1
-       RETURNING ${WITHDRAWAL_COLUMNS}`,
+       SET status = $2,
+           processed_at = CASE
+             WHEN $2 IN ('success', 'failed') THEN NOW()
+             ELSE processed_at
+           END
+       WHERE id = $1`,
       [id, status]
     );
-    return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
+    return withdrawalRepository.findById(id, client);
   },
 
   updateProviderDetails: async (
@@ -182,16 +214,18 @@ export const withdrawalRepository = {
       status: WithdrawalStatus;
     }
   ): Promise<IWithdrawal | null> => {
-    const result = await pool.query<WithdrawalRow>(
+    await pool.query(
       `UPDATE withdrawals
        SET provider_payout_id = COALESCE($2, provider_payout_id),
            status = $3,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING ${WITHDRAWAL_COLUMNS}`,
+           processed_at = CASE
+             WHEN $3 IN ('success', 'failed') THEN NOW()
+             ELSE processed_at
+           END
+       WHERE id = $1`,
       [id, data.providerPayoutId ?? null, data.status]
     );
-    return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
+    return withdrawalRepository.findById(id);
   },
 
   updateFailure: async (
@@ -201,13 +235,14 @@ export const withdrawalRepository = {
     client?: Queryable
   ): Promise<IWithdrawal | null> => {
     const db = client ?? pool;
-    const result = await db.query<WithdrawalRow>(
+    await db.query(
       `UPDATE withdrawals
-       SET status = $2, failure_reason = $3, updated_at = NOW()
-       WHERE id = $1
-       RETURNING ${WITHDRAWAL_COLUMNS}`,
+       SET status = $2,
+           remarks = $3,
+           processed_at = NOW()
+       WHERE id = $1`,
       [id, status, failureReason]
     );
-    return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
+    return withdrawalRepository.findById(id, client);
   },
 };

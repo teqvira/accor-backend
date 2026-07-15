@@ -11,11 +11,12 @@ interface RedemptionTransactionRow {
   id: string;
   user_id: string;
   qr_code_id: string;
+  batch_id: string;
   product_id: string;
   wallet_amount: string | number;
   reward_points: number;
+  redeemed_at: Date;
   created_at: Date;
-  updated_at: Date;
 }
 
 export function mapRedemptionTransactionRow(
@@ -25,17 +26,18 @@ export function mapRedemptionTransactionRow(
     _id: row.id,
     userId: row.user_id,
     qrCodeId: row.qr_code_id,
+    batchId: row.batch_id,
     productId: row.product_id,
     walletAmount: Number(row.wallet_amount),
     rewardPoints: row.reward_points,
+    redeemedAt: row.redeemed_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
 const TX_COLUMNS = `
-  id, user_id, qr_code_id, product_id, wallet_amount, reward_points,
-  created_at, updated_at
+  id, user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points,
+  redeemed_at, created_at
 `;
 
 export const redemptionTransactionRepository = {
@@ -46,15 +48,17 @@ export const redemptionTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<RedemptionTransactionRow>(
       `INSERT INTO redemption_transactions
-         (user_id, qr_code_id, product_id, wallet_amount, reward_points)
-       VALUES ($1, $2, $3, $4, $5)
+         (user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points, redeemed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()))
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
         data.qrCodeId,
+        data.batchId,
         data.productId,
         data.walletAmount,
         data.rewardPoints,
+        data.redeemedAt ?? null,
       ]
     );
     return mapRedemptionTransactionRow(result.rows[0]);
@@ -89,7 +93,7 @@ export const redemptionTransactionRepository = {
         `SELECT ${TX_COLUMNS}
          FROM redemption_transactions
          WHERE user_id = $1
-         ORDER BY created_at DESC
+         ORDER BY redeemed_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset]
       ),
@@ -115,7 +119,7 @@ export const redemptionTransactionRepository = {
       pool.query<RedemptionTransactionRow>(
         `SELECT ${TX_COLUMNS}
          FROM redemption_transactions
-         ORDER BY created_at DESC
+         ORDER BY redeemed_at DESC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       ),
@@ -147,6 +151,7 @@ export const redemptionTransactionRepository = {
       product: { _id: string; name: string; skuCode: string };
       walletAmount: number;
       rewardPoints: number;
+      redeemedAt: Date;
       createdAt: Date;
     }>;
     total: number;
@@ -157,6 +162,7 @@ export const redemptionTransactionRepository = {
         id: string;
         wallet_amount: string | number;
         reward_points: number;
+        redeemed_at: Date;
         created_at: Date;
         user_id: string;
         mobile_number: string | null;
@@ -171,6 +177,7 @@ export const redemptionTransactionRepository = {
            rt.id,
            rt.wallet_amount,
            rt.reward_points,
+           rt.redeemed_at,
            rt.created_at,
            u.id AS user_id,
            u.mobile_number,
@@ -184,7 +191,7 @@ export const redemptionTransactionRepository = {
          LEFT JOIN users u ON rt.user_id = u.id
          LEFT JOIN qr_codes qc ON rt.qr_code_id = qc.id
          LEFT JOIN products p ON rt.product_id = p.id
-         ORDER BY rt.created_at DESC
+         ORDER BY rt.redeemed_at DESC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       ),
@@ -212,6 +219,7 @@ export const redemptionTransactionRepository = {
         },
         walletAmount: Number(row.wallet_amount),
         rewardPoints: row.reward_points,
+        redeemedAt: row.redeemed_at,
         createdAt: row.created_at,
       })),
       total: Number(countResult.rows[0]?.count ?? 0),

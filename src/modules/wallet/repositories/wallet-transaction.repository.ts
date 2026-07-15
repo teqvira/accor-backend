@@ -13,10 +13,10 @@ interface WalletTransactionRow {
   user_id: string;
   amount: string | number;
   type: WalletTransactionType;
+  reference_type: IWalletTransaction['referenceType'] | null;
   reference_id: string | null;
-  description: string | null;
+  remarks: string | null;
   created_at: Date;
-  updated_at: Date;
 }
 
 export function mapWalletTransactionRow(
@@ -27,15 +27,15 @@ export function mapWalletTransactionRow(
     userId: row.user_id,
     amount: Number(row.amount),
     type: row.type,
+    referenceType: row.reference_type ?? undefined,
     referenceId: row.reference_id ?? undefined,
-    description: row.description ?? undefined,
+    remarks: row.remarks ?? undefined,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
 const TX_COLUMNS = `
-  id, user_id, amount, type, reference_id, description, created_at, updated_at
+  id, user_id, amount, type, reference_type, reference_id, remarks, created_at
 `;
 
 export const walletTransactionRepository = {
@@ -46,15 +46,16 @@ export const walletTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<WalletTransactionRow>(
       `INSERT INTO wallet_transactions
-         (user_id, amount, type, reference_id, description)
-       VALUES ($1, $2, $3, $4, $5)
+         (user_id, amount, type, reference_type, reference_id, remarks)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
         data.amount,
         data.type,
+        data.referenceType ?? null,
         data.referenceId ?? null,
-        data.description ?? null,
+        data.remarks ?? null,
       ]
     );
     return mapWalletTransactionRow(result.rows[0]);

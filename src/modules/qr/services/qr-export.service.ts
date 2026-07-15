@@ -3,11 +3,17 @@ import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { Response } from 'express';
 import { QrExportFormat } from '../constants/qr.constants';
+import {
+  DEFAULT_QR_LABEL_COLOR,
+  DEFAULT_QR_LABEL_SHAPE,
+  QrLabelColor,
+  QrLabelShape,
+} from '../constants/qr-label.constants';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
 import { buildQrPayload } from './qr-generation.service';
 import {
   drawQrLabel,
-  QR_LABEL_SIZE,
+  getLabelSize,
   QrLabelMetadata,
 } from '../utils/qr-label.renderer';
 
@@ -38,6 +44,18 @@ async function streamZipExport(
   await archive.finalize();
 }
 
+function pdfGridForShape(shape: QrLabelShape): {
+  cols: number;
+  rows: number;
+  gapX: number;
+  gapY: number;
+} {
+  if (shape === 'square') {
+    return { cols: 4, rows: 8, gapX: 10, gapY: 10 };
+  }
+  return { cols: 6, rows: 8, gapX: 10, gapY: 10 };
+}
+
 async function streamPdfExport(
   res: Response,
   batchName: string,
@@ -50,22 +68,22 @@ async function streamPdfExport(
     `attachment; filename="${batchName.replace(/\s+/g, '_')}_qrs.pdf"`
   );
 
+  const shape = metadata.shape ?? DEFAULT_QR_LABEL_SHAPE;
+  const { width: labelW, height: labelH } = getLabelSize(shape);
+  const { cols, rows, gapX, gapY } = pdfGridForShape(shape);
+  const perPage = cols * rows;
+
   const doc = new PDFDocument({ autoFirstPage: false, size: 'LETTER' });
   doc.pipe(res);
 
-  const cols = 3;
-  const rows = 4;
-  const perPage = cols * rows;
-  const gapX = 14;
-  const gapY = 14;
-  const gridW = cols * QR_LABEL_SIZE + (cols - 1) * gapX;
-  const gridH = rows * QR_LABEL_SIZE + (rows - 1) * gapY;
+  const gridW = cols * labelW + (cols - 1) * gapX;
+  const gridH = rows * labelH + (rows - 1) * gapY;
   const pageW = 612;
   const pageH = 792;
-  const marginX = (pageW - gridW) / 2;
-  const marginY = (pageH - gridH) / 2;
-  const cellW = QR_LABEL_SIZE + gapX;
-  const cellH = QR_LABEL_SIZE + gapY;
+  const marginX = Math.max(18, (pageW - gridW) / 2);
+  const marginY = Math.max(18, (pageH - gridH) / 2);
+  const cellW = labelW + gapX;
+  const cellH = labelH + gapY;
 
   for (let i = 0; i < codes.length; i++) {
     if (i % perPage === 0) doc.addPage();
@@ -107,6 +125,8 @@ export interface ExportBatchQrOptions {
   batchName: string;
   batchId: string;
   productSku?: string;
+  shape?: QrLabelShape;
+  color?: QrLabelColor;
   format: QrExportFormat;
   limit?: number;
 }
@@ -115,7 +135,15 @@ export async function exportBatchQrCodes(
   res: Response,
   options: ExportBatchQrOptions
 ): Promise<void> {
-  const { batchName, batchId, productSku, format, limit = 1000 } = options;
+  const {
+    batchName,
+    batchId,
+    productSku,
+    shape = DEFAULT_QR_LABEL_SHAPE,
+    color = DEFAULT_QR_LABEL_COLOR,
+    format,
+    limit = 1000,
+  } = options;
   const codes = await qrCodeRepository.findCodesByBatchId(batchId, limit);
 
   if (codes.length === 0) {
@@ -131,6 +159,8 @@ export async function exportBatchQrCodes(
     batchId,
     batchName,
     productSku,
+    shape,
+    color,
   };
 
   switch (format) {

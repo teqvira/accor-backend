@@ -14,9 +14,7 @@ function sanitizeProduct(product: IProduct) {
     name: product.name,
     productType: product.productType,
     brand: product.brand,
-    couponCode: product.couponCode,
     status: product.status,
-    description: product.description,
     imageUrl: product.imageUrl,
     activeCoupons: product.activeCoupons ?? 0,
     createdAt: product.createdAt,
@@ -53,9 +51,7 @@ export class ProductsService {
       name: input.name,
       productType: input.productType,
       brand: input.brand,
-      couponCode: input.couponCode,
       status: input.status ?? 'active',
-      description: input.description,
       imageUrl: input.imageUrl,
     });
 
@@ -102,11 +98,7 @@ export class ProductsService {
       name: input.name ?? product.name,
       productType: input.productType ?? product.productType,
       brand: input.brand !== undefined ? input.brand : product.brand ?? null,
-      couponCode:
-        input.couponCode !== undefined ? input.couponCode : product.couponCode ?? null,
       status: input.status ?? product.status,
-      description:
-        input.description !== undefined ? input.description : product.description ?? null,
       imageUrl: input.imageUrl !== undefined ? input.imageUrl : product.imageUrl ?? null,
     });
 

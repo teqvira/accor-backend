@@ -6,9 +6,7 @@ export interface IProduct {
   name: string;
   productType: ProductType;
   brand?: string;
-  couponCode?: string;
   status: ProductStatus;
-  description?: string;
   imageUrl?: string;
   activeCoupons?: number;
   createdAt: Date;
@@ -20,9 +18,7 @@ export interface CreateProductInput {
   name: string;
   productType: ProductType;
   brand?: string;
-  couponCode?: string;
   status?: ProductStatus;
-  description?: string;
   imageUrl?: string;
 }
 
@@ -31,9 +27,7 @@ export interface UpdateProductInput {
   name?: string;
   productType?: ProductType;
   brand?: string | null;
-  couponCode?: string | null;
   status?: ProductStatus;
-  description?: string | null;
   imageUrl?: string | null;
 }
 

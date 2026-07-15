@@ -4,6 +4,7 @@ import { userRepository } from '../../auth/repositories/user.repository';
 import { walletTransactionRepository } from '../repositories/wallet-transaction.repository';
 import {
   IWalletTransaction,
+  WalletReferenceType,
   WalletTransactionType,
 } from '../types/wallet.types';
 
@@ -13,8 +14,9 @@ function sanitizeTransaction(tx: IWalletTransaction) {
     userId: tx.userId,
     amount: tx.amount,
     type: tx.type,
+    referenceType: tx.referenceType,
     referenceId: tx.referenceId,
-    description: tx.description,
+    remarks: tx.remarks,
     createdAt: tx.createdAt,
   };
 }
@@ -48,8 +50,9 @@ export class WalletService {
     userId: string,
     amount: number,
     referenceId: string,
-    description: string,
-    client?: PoolClient
+    remarks: string,
+    client?: PoolClient,
+    referenceType: WalletReferenceType = 'withdrawal'
   ) {
     const user = await userRepository.findById(userId, { client });
     if (!user) {
@@ -69,8 +72,9 @@ export class WalletService {
         userId,
         amount,
         type: WalletTransactionType.DEBIT,
+        referenceType,
         referenceId,
-        description,
+        remarks,
       },
       client
     );
@@ -82,8 +86,9 @@ export class WalletService {
     userId: string,
     amount: number,
     referenceId: string,
-    description: string,
-    client?: PoolClient
+    remarks: string,
+    client?: PoolClient,
+    referenceType: WalletReferenceType = 'qr_redemption'
   ) {
     await userRepository.updateWalletAndPoints(userId, amount, 0, client);
 
@@ -92,8 +97,9 @@ export class WalletService {
         userId,
         amount,
         type: WalletTransactionType.CREDIT,
+        referenceType,
         referenceId,
-        description,
+        remarks,
       },
       client
     );

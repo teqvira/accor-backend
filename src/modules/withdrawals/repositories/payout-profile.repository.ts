@@ -8,12 +8,14 @@ import {
 interface PayoutProfileRow {
   id: string;
   user_id: string;
-  method: IPayoutProfile['method'];
-  account_holder_name: string;
+  account_type: IPayoutProfile['method'];
+  account_holder_name: string | null;
   upi_id: string | null;
+  bank_name: string | null;
   account_number: string | null;
-  ifsc: string | null;
-  provider: PayoutProviderName;
+  ifsc_code: string | null;
+  is_default: boolean;
+  provider: PayoutProviderName | null;
   provider_contact_id: string | null;
   provider_fund_account_id: string | null;
   cashfree_beneficiary_id: string | null;
@@ -28,11 +30,13 @@ export function mapPayoutProfileRow(
   const profile: IPayoutProfile = {
     _id: row.id,
     userId: row.user_id,
-    method: row.method,
-    accountHolderName: row.account_holder_name,
+    method: row.account_type,
+    accountHolderName: row.account_holder_name ?? '',
     upiId: row.upi_id ?? undefined,
-    ifsc: row.ifsc ?? undefined,
-    provider: row.provider,
+    ifsc: row.ifsc_code ?? undefined,
+    bankName: row.bank_name ?? undefined,
+    isDefault: row.is_default,
+    provider: row.provider ?? undefined,
     providerContactId: row.provider_contact_id ?? undefined,
     providerFundAccountId: row.provider_fund_account_id ?? undefined,
     cashfreeBeneficiaryId: row.cashfree_beneficiary_id ?? undefined,
@@ -48,36 +52,41 @@ export function mapPayoutProfileRow(
 }
 
 const PROFILE_COLUMNS = `
-  id, user_id, method, account_holder_name, upi_id, account_number, ifsc,
-  provider, provider_contact_id, provider_fund_account_id, cashfree_beneficiary_id,
-  created_at, updated_at
+  id, user_id, account_type, account_holder_name, upi_id, bank_name,
+  account_number, ifsc_code, is_default, provider, provider_contact_id,
+  provider_fund_account_id, cashfree_beneficiary_id, created_at, updated_at
 `;
 
 export interface CreatePayoutProfileData {
   userId: string;
   method: IPayoutProfile['method'];
   accountHolderName: string;
-  provider: PayoutProviderName;
+  provider?: PayoutProviderName;
   upiId?: string | null;
   accountNumber?: string | null;
   ifsc?: string | null;
+  bankName?: string | null;
+  isDefault?: boolean;
 }
 
 export const payoutProfileRepository = {
   create: async (data: CreatePayoutProfileData): Promise<IPayoutProfile> => {
     const result = await pool.query<PayoutProfileRow>(
       `INSERT INTO payout_profiles
-         (user_id, method, account_holder_name, provider, upi_id, account_number, ifsc)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (user_id, account_type, account_holder_name, provider, upi_id,
+          account_number, ifsc_code, bank_name, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${PROFILE_COLUMNS}`,
       [
         data.userId,
         data.method,
         data.accountHolderName,
-        data.provider,
+        data.provider ?? null,
         data.upiId ?? null,
         data.accountNumber ?? null,
         data.ifsc ?? null,
+        data.bankName ?? null,
+        data.isDefault ?? true,
       ]
     );
     return mapPayoutProfileRow(result.rows[0], { includeAccountNumber: true });
@@ -109,13 +118,15 @@ export const payoutProfileRepository = {
       values.push(value);
     };
 
-    if (data.method !== undefined) assign('method', data.method);
+    if (data.method !== undefined) assign('account_type', data.method);
     if (data.accountHolderName !== undefined) {
       assign('account_holder_name', data.accountHolderName);
     }
     if (data.upiId !== undefined) assign('upi_id', data.upiId);
     if (data.accountNumber !== undefined) assign('account_number', data.accountNumber);
-    if (data.ifsc !== undefined) assign('ifsc', data.ifsc);
+    if (data.ifsc !== undefined) assign('ifsc_code', data.ifsc);
+    if (data.bankName !== undefined) assign('bank_name', data.bankName);
+    if (data.isDefault !== undefined) assign('is_default', data.isDefault);
     if (data.provider !== undefined) assign('provider', data.provider);
     if (data.providerContactId !== undefined) {
       assign('provider_contact_id', data.providerContactId);
@@ -161,10 +172,11 @@ export const payoutProfileRepository = {
       const updated = await payoutProfileRepository.update(existing._id, {
         method: data.method,
         accountHolderName: data.accountHolderName,
-        provider: data.provider,
+        provider: data.provider ?? null,
         upiId: data.upiId ?? null,
         accountNumber: data.accountNumber ?? null,
         ifsc: data.ifsc ?? null,
+        bankName: data.bankName ?? null,
         providerContactId: null,
         providerFundAccountId: null,
         cashfreeBeneficiaryId: null,

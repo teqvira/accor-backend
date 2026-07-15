@@ -4,6 +4,7 @@ import { userRepository } from '../../auth/repositories/user.repository';
 import { rewardTransactionRepository } from '../repositories/reward-transaction.repository';
 import {
   IRewardTransaction,
+  RewardReferenceType,
   RewardTransactionType,
 } from '../types/rewards.types';
 
@@ -13,8 +14,9 @@ function sanitizeTransaction(tx: IRewardTransaction) {
     userId: tx.userId,
     points: tx.points,
     type: tx.type,
+    referenceType: tx.referenceType,
     referenceId: tx.referenceId,
-    description: tx.description,
+    remarks: tx.remarks,
     createdAt: tx.createdAt,
   };
 }
@@ -48,8 +50,9 @@ export class RewardsService {
     userId: string,
     points: number,
     referenceId: string,
-    description: string,
-    client?: PoolClient
+    remarks: string,
+    client?: PoolClient,
+    referenceType: RewardReferenceType = 'qr_redemption'
   ) {
     await userRepository.updateWalletAndPoints(userId, 0, points, client);
 
@@ -58,8 +61,9 @@ export class RewardsService {
         userId,
         points,
         type: RewardTransactionType.CREDIT,
+        referenceType,
         referenceId,
-        description,
+        remarks,
       },
       client
     );
@@ -71,8 +75,9 @@ export class RewardsService {
     userId: string,
     points: number,
     referenceId: string,
-    description: string,
-    client?: PoolClient
+    remarks: string,
+    client?: PoolClient,
+    referenceType: RewardReferenceType = 'reward_redeem'
   ) {
     const user = await userRepository.findById(userId, { client });
     if (!user) {
@@ -92,8 +97,9 @@ export class RewardsService {
         userId,
         points,
         type: RewardTransactionType.DEBIT,
+        referenceType,
         referenceId,
-        description,
+        remarks,
       },
       client
     );

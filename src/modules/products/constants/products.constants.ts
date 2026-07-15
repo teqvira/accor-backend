@@ -14,12 +14,3 @@ export const PRODUCT_TEXT_MAX_LENGTH = 10000;
 export const PRODUCT_STATUSES = ['active', 'inactive'] as const;
 
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
-
-export const PRODUCT_BRANDS = [
-  'accor_premium',
-  'aldor_gold',
-  'accor_ultra_coolant',
-  'other',
-] as const;
-
-export type ProductBrand = (typeof PRODUCT_BRANDS)[number];

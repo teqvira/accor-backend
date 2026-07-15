@@ -11,7 +11,6 @@ interface QrCodeRow {
   redeemed_by: string | null;
   redeemed_at: Date | null;
   created_at: Date;
-  updated_at: Date;
 }
 
 export function mapQrCodeRow(row: QrCodeRow): IQrCode {
@@ -24,13 +23,11 @@ export function mapQrCodeRow(row: QrCodeRow): IQrCode {
     redeemedBy: row.redeemed_by ?? undefined,
     redeemedAt: row.redeemed_at ?? undefined,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
 const CODE_COLUMNS = `
-  id, code, batch_id, product_id, redeemed, redeemed_by, redeemed_at,
-  created_at, updated_at
+  id, code, batch_id, product_id, redeemed, redeemed_by, redeemed_at, created_at
 `;
 
 type Queryable = Pick<PoolClient, 'query'>;
@@ -38,7 +35,7 @@ type Queryable = Pick<PoolClient, 'query'>;
 export interface QrCodeInsertDoc {
   code: string;
   batchId: string;
-  productId?: string;
+  productId: string;
 }
 
 export const qrCodeRepository = {
@@ -47,7 +44,7 @@ export const qrCodeRepository = {
       `INSERT INTO qr_codes (code, batch_id, product_id)
        VALUES ($1, $2, $3)
        RETURNING ${CODE_COLUMNS}`,
-      [data.code, data.batchId, data.productId ?? null]
+      [data.code, data.batchId, data.productId]
     );
     return mapQrCodeRow(result.rows[0]);
   },
@@ -61,7 +58,7 @@ export const qrCodeRepository = {
 
     for (const doc of docs) {
       placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
-      values.push(doc.code, doc.batchId, doc.productId ?? null);
+      values.push(doc.code, doc.batchId, doc.productId);
     }
 
     const result = await pool.query<{ id: string }>(
@@ -264,8 +261,7 @@ export const qrCodeRepository = {
       `UPDATE qr_codes
        SET redeemed = true,
            redeemed_by = $2,
-           redeemed_at = NOW(),
-           updated_at = NOW()
+           redeemed_at = NOW()
        WHERE id = $1 AND redeemed = false
        RETURNING ${CODE_COLUMNS}`,
       [id, userId]
@@ -283,8 +279,7 @@ export const qrCodeRepository = {
       `UPDATE qr_codes
        SET redeemed = true,
            redeemed_by = $2,
-           redeemed_at = NOW(),
-           updated_at = NOW()
+           redeemed_at = NOW()
        WHERE code = $1 AND redeemed = false
        RETURNING ${CODE_COLUMNS}`,
       [code, userId]

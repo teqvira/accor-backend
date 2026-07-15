@@ -10,15 +10,15 @@ import {
 
 type Queryable = Pick<PoolClient, 'query'>;
 
-const USER_COLUMNS = `
-  id, name, email, mobile_number, password, wallet_balance, reward_points,
-  role, is_active, is_verified, otp_hash, otp_expires_at, otp_last_sent_at,
-  created_at, updated_at
+const USER_PUBLIC_COLUMNS = `
+  id, name, email, mobile_number, wallet_balance, reward_points,
+  role, is_active, is_verified, created_at, updated_at
 `;
 
-const USER_COLUMNS_WITH_PASSWORD = `${USER_COLUMNS}`;
-
-const USER_COLUMNS_WITH_OTP = `${USER_COLUMNS}`;
+const USER_COLUMNS_WITH_PASSWORD = `
+  id, name, email, mobile_number, password_hash, wallet_balance, reward_points,
+  role, is_active, is_verified, created_at, updated_at
+`;
 
 function mapOptionalRow(row: UserRow | undefined): IUser | null {
   return row ? mapUserRow(row) : null;
@@ -29,15 +29,12 @@ interface UserRow {
   name: string | null;
   email: string | null;
   mobile_number: string | null;
-  password?: string | null;
+  password_hash?: string | null;
   wallet_balance: string | number;
   reward_points: number;
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
-  otp_hash?: string | null;
-  otp_expires_at?: Date | null;
-  otp_last_sent_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -47,16 +44,13 @@ export const userRepository = {
     id: string,
     options?: {
       includePassword?: boolean;
-      includeOtp?: boolean;
       client?: Queryable;
     }
   ): Promise<IUser | null> => {
     const db = options?.client ?? pool;
-    const columns =
-      options?.includePassword || options?.includeOtp
-        ? USER_COLUMNS_WITH_PASSWORD
-        : `id, name, email, mobile_number, wallet_balance, reward_points,
-           role, is_active, is_verified, created_at, updated_at`;
+    const columns = options?.includePassword
+      ? USER_COLUMNS_WITH_PASSWORD
+      : USER_PUBLIC_COLUMNS;
     const result = await db.query<UserRow>(
       `SELECT ${columns} FROM users WHERE id = $1`,
       [id]
@@ -66,13 +60,11 @@ export const userRepository = {
 
   findByEmail: async (
     email: string,
-    options?: { includePassword?: boolean; includeOtp?: boolean }
+    options?: { includePassword?: boolean }
   ): Promise<IUser | null> => {
-    const columns =
-      options?.includePassword || options?.includeOtp
-        ? USER_COLUMNS_WITH_OTP
-        : `id, name, email, mobile_number, wallet_balance, reward_points,
-           role, is_active, is_verified, created_at, updated_at`;
+    const columns = options?.includePassword
+      ? USER_COLUMNS_WITH_PASSWORD
+      : USER_PUBLIC_COLUMNS;
     const result = await pool.query<UserRow>(
       `SELECT ${columns} FROM users WHERE email = $1`,
       [email.toLowerCase()]
@@ -82,13 +74,11 @@ export const userRepository = {
 
   findByMobile: async (
     mobileNumber: string,
-    options?: { includePassword?: boolean; includeOtp?: boolean }
+    options?: { includePassword?: boolean }
   ): Promise<IUser | null> => {
-    const columns =
-      options?.includePassword || options?.includeOtp
-        ? USER_COLUMNS_WITH_OTP
-        : `id, name, email, mobile_number, wallet_balance, reward_points,
-           role, is_active, is_verified, created_at, updated_at`;
+    const columns = options?.includePassword
+      ? USER_COLUMNS_WITH_PASSWORD
+      : USER_PUBLIC_COLUMNS;
     const result = await pool.query<UserRow>(
       `SELECT ${columns} FROM users WHERE mobile_number = $1`,
       [mobileNumber]
@@ -99,10 +89,9 @@ export const userRepository = {
   create: async (data: CreateUserData): Promise<IUser> => {
     const result = await pool.query<UserRow>(
       `INSERT INTO users
-         (name, email, mobile_number, password, role, is_verified)
+         (name, email, mobile_number, password_hash, role, is_verified)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, email, mobile_number, wallet_balance, reward_points,
-         role, is_active, is_verified, created_at, updated_at`,
+       RETURNING ${USER_PUBLIC_COLUMNS}`,
       [
         data.name ?? null,
         data.email?.toLowerCase() ?? null,
@@ -133,7 +122,7 @@ export const userRepository = {
       values.push(data.mobileNumber ?? null);
     }
     if (data.password !== undefined) {
-      sets.push(`password = $${paramIndex++}`);
+      sets.push(`password_hash = $${paramIndex++}`);
       values.push(data.password);
     }
     if (data.role !== undefined) {
@@ -148,18 +137,6 @@ export const userRepository = {
       sets.push(`is_verified = $${paramIndex++}`);
       values.push(data.isVerified);
     }
-    if (data.otpHash !== undefined) {
-      sets.push(`otp_hash = $${paramIndex++}`);
-      values.push(data.otpHash);
-    }
-    if (data.otpExpiresAt !== undefined) {
-      sets.push(`otp_expires_at = $${paramIndex++}`);
-      values.push(data.otpExpiresAt);
-    }
-    if (data.otpLastSentAt !== undefined) {
-      sets.push(`otp_last_sent_at = $${paramIndex++}`);
-      values.push(data.otpLastSentAt);
-    }
 
     if (sets.length === 0) {
       return userRepository.findById(id);
@@ -168,51 +145,26 @@ export const userRepository = {
     const result = await pool.query<UserRow>(
       `UPDATE users SET ${sets.join(', ')}, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, email, mobile_number, wallet_balance, reward_points,
-         role, is_active, is_verified, created_at, updated_at`,
+       RETURNING ${USER_PUBLIC_COLUMNS}`,
       values
     );
     return mapOptionalRow(result.rows[0]);
   },
 
-  updateOtp: async (
-    id: string,
-    otpHash: string,
-    otpExpiresAt: Date,
-    otpLastSentAt: Date
-  ): Promise<void> => {
-    await pool.query(
-      `UPDATE users
-       SET otp_hash = $2, otp_expires_at = $3, otp_last_sent_at = $4, updated_at = NOW()
-       WHERE id = $1`,
-      [id, otpHash, otpExpiresAt, otpLastSentAt]
-    );
-  },
-
-  clearOtpAndVerify: async (id: string): Promise<IUser | null> => {
+  markVerified: async (id: string): Promise<IUser | null> => {
     const result = await pool.query<UserRow>(
       `UPDATE users
-       SET otp_hash = NULL, otp_expires_at = NULL, is_verified = true, updated_at = NOW()
+       SET is_verified = true, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, email, mobile_number, wallet_balance, reward_points,
-         role, is_active, is_verified, created_at, updated_at`,
+       RETURNING ${USER_PUBLIC_COLUMNS}`,
       [id]
     );
     return mapOptionalRow(result.rows[0]);
   },
 
-  clearOtp: async (id: string): Promise<void> => {
-    await pool.query(
-      `UPDATE users
-       SET otp_hash = NULL, otp_expires_at = NULL, updated_at = NOW()
-       WHERE id = $1`,
-      [id]
-    );
-  },
-
   updatePassword: async (id: string, password: string): Promise<void> => {
     await pool.query(
-      `UPDATE users SET password = $2, updated_at = NOW() WHERE id = $1`,
+      `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`,
       [id, password]
     );
   },
@@ -247,8 +199,7 @@ export const userRepository = {
            reward_points = reward_points + $3,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, email, mobile_number, wallet_balance, reward_points,
-         role, is_active, is_verified, created_at, updated_at`,
+       RETURNING ${USER_PUBLIC_COLUMNS}`,
       [id, walletDelta, pointsDelta]
     );
     return mapOptionalRow(result.rows[0]);

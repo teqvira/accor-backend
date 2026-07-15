@@ -11,6 +11,10 @@ export function buildQrPayload(code: string): string {
 }
 
 export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
+  if (!batch.productId) {
+    throw new Error(`Batch ${batch._id} is missing product_id`);
+  }
+
   const remaining = batch.totalQrs - batch.generatedCount;
   if (remaining <= 0) return 0;
 
@@ -22,7 +26,7 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
     const docs: Array<{
       code: string;
       batchId: string;
-      productId?: string;
+      productId: string;
     }> = [];
     const codes = new Set<string>();
 
@@ -33,7 +37,7 @@ export async function generateCodesForBatch(batch: IQrBatch): Promise<number> {
       docs.push({
         code,
         batchId: batch._id,
-        ...(batch.productId ? { productId: batch.productId } : {}),
+        productId: batch.productId,
       });
     }
 

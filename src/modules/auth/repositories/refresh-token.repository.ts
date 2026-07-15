@@ -5,6 +5,7 @@ export interface IRefreshToken {
   userId: string;
   tokenHash: string;
   expiresAt: Date;
+  revoked: boolean;
   createdAt: Date;
 }
 
@@ -13,6 +14,7 @@ interface RefreshTokenRow {
   user_id: string;
   token_hash: string;
   expires_at: Date;
+  revoked: boolean;
   created_at: Date;
 }
 
@@ -22,9 +24,14 @@ function mapRefreshTokenRow(row: RefreshTokenRow): IRefreshToken {
     userId: row.user_id,
     tokenHash: row.token_hash,
     expiresAt: row.expires_at,
+    revoked: row.revoked,
     createdAt: row.created_at,
   };
 }
+
+const TOKEN_COLUMNS = `
+  id, user_id, token_hash, expires_at, revoked, created_at
+`;
 
 export const refreshTokenRepository = {
   create: async (data: {
@@ -35,7 +42,7 @@ export const refreshTokenRepository = {
     const result = await pool.query<RefreshTokenRow>(
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
        VALUES ($1, $2, $3)
-       RETURNING id, user_id, token_hash, expires_at, created_at`,
+       RETURNING ${TOKEN_COLUMNS}`,
       [data.userId, data.tokenHash, data.expiresAt]
     );
     return mapRefreshTokenRow(result.rows[0]);
@@ -46,29 +53,58 @@ export const refreshTokenRepository = {
     tokenHash: string
   ): Promise<IRefreshToken | null> => {
     const result = await pool.query<RefreshTokenRow>(
-      `SELECT id, user_id, token_hash, expires_at, created_at
+      `SELECT ${TOKEN_COLUMNS}
        FROM refresh_tokens
-       WHERE user_id = $1 AND token_hash = $2`,
+       WHERE user_id = $1
+         AND token_hash = $2
+         AND revoked = false
+         AND expires_at > NOW()`,
       [userId, tokenHash]
     );
     return result.rows[0] ? mapRefreshTokenRow(result.rows[0]) : null;
   },
 
+  revokeById: async (id: string): Promise<void> => {
+    await pool.query(
+      `UPDATE refresh_tokens SET revoked = true WHERE id = $1`,
+      [id]
+    );
+  },
+
+  revokeByUserAndHash: async (
+    userId: string,
+    tokenHash: string
+  ): Promise<void> => {
+    await pool.query(
+      `UPDATE refresh_tokens
+       SET revoked = true
+       WHERE user_id = $1 AND token_hash = $2 AND revoked = false`,
+      [userId, tokenHash]
+    );
+  },
+
+  revokeManyByUserId: async (userId: string): Promise<void> => {
+    await pool.query(
+      `UPDATE refresh_tokens
+       SET revoked = true
+       WHERE user_id = $1 AND revoked = false`,
+      [userId]
+    );
+  },
+
+  // Backward-compatible aliases used by auth.service
   deleteById: async (id: string): Promise<void> => {
-    await pool.query(`DELETE FROM refresh_tokens WHERE id = $1`, [id]);
+    await refreshTokenRepository.revokeById(id);
   },
 
   deleteByUserAndHash: async (
     userId: string,
     tokenHash: string
   ): Promise<void> => {
-    await pool.query(
-      `DELETE FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2`,
-      [userId, tokenHash]
-    );
+    await refreshTokenRepository.revokeByUserAndHash(userId, tokenHash);
   },
 
   deleteManyByUserId: async (userId: string): Promise<void> => {
-    await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [userId]);
+    await refreshTokenRepository.revokeManyByUserId(userId);
   },
 };

@@ -3,21 +3,27 @@ export enum WalletTransactionType {
   DEBIT = 'debit',
 }
 
+export type WalletReferenceType =
+  | 'qr_redemption'
+  | 'withdrawal'
+  | 'admin_adjustment';
+
 export interface IWalletTransaction {
   _id: string;
   userId: string;
   amount: number;
   type: WalletTransactionType;
+  referenceType?: WalletReferenceType;
   referenceId?: string;
-  description?: string;
+  remarks?: string;
   createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface CreateWalletTransactionData {
   userId: string;
   amount: number;
   type: WalletTransactionType;
+  referenceType?: WalletReferenceType;
   referenceId?: string;
-  description?: string;
+  remarks?: string;
 }

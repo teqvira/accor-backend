@@ -11,9 +11,7 @@ interface ProductRow {
   name: string;
   product_type: ProductType;
   brand: string | null;
-  coupon_code: string | null;
   status: ProductStatus;
-  description: string | null;
   image_url: string | null;
   created_at: Date;
   updated_at: Date;
@@ -21,8 +19,8 @@ interface ProductRow {
 }
 
 const PRODUCT_LIST_COLUMNS = `
-  p.id, p.sku_code, p.name, p.product_type, p.brand, p.coupon_code, p.status,
-  p.description, p.image_url, p.created_at, p.updated_at
+  p.id, p.sku_code, p.name, p.product_type, p.brand, p.status,
+  p.image_url, p.created_at, p.updated_at
 `;
 
 export function mapProductRow(row: ProductRow): IProduct {
@@ -32,9 +30,7 @@ export function mapProductRow(row: ProductRow): IProduct {
     name: row.name,
     productType: row.product_type,
     brand: row.brand ?? undefined,
-    couponCode: row.coupon_code ?? undefined,
     status: row.status,
-    description: row.description ?? undefined,
     imageUrl: row.image_url ?? undefined,
     activeCoupons:
       row.active_coupons !== undefined ? Number(row.active_coupons) : undefined,
@@ -48,9 +44,7 @@ export interface CreateProductData {
   name: string;
   productType: ProductType;
   brand?: string;
-  couponCode?: string;
   status?: ProductStatus;
-  description?: string;
   imageUrl?: string;
 }
 
@@ -59,9 +53,7 @@ export interface UpdateProductData {
   name?: string;
   productType?: ProductType;
   brand?: string | null;
-  couponCode?: string | null;
   status?: ProductStatus;
-  description?: string | null;
   imageUrl?: string | null;
 }
 
@@ -106,18 +98,16 @@ export const productRepository = {
   create: async (data: CreateProductData): Promise<IProduct> => {
     const result = await pool.query<ProductRow>(
       `INSERT INTO products
-         (sku_code, name, product_type, brand, coupon_code, status, description, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
-                 description, image_url, created_at, updated_at`,
+         (sku_code, name, product_type, brand, status, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, sku_code, name, product_type, brand, status,
+                 image_url, created_at, updated_at`,
       [
         data.skuCode,
         data.name,
         data.productType,
         data.brand ?? null,
-        data.couponCode ?? null,
         data.status ?? 'active',
-        data.description ?? null,
         data.imageUrl ?? null,
       ]
     );
@@ -139,8 +129,8 @@ export const productRepository = {
 
   findBySkuCode: async (skuCode: string): Promise<IProduct | null> => {
     const result = await pool.query<ProductRow>(
-      `SELECT id, sku_code, name, product_type, brand, coupon_code, status,
-              description, image_url, created_at, updated_at
+      `SELECT id, sku_code, name, product_type, brand, status,
+              image_url, created_at, updated_at
        FROM products WHERE sku_code = $1`,
       [skuCode]
     );
@@ -201,23 +191,19 @@ export const productRepository = {
            name = $3,
            product_type = $4,
            brand = $5,
-           coupon_code = $6,
-           status = $7,
-           description = $8,
-           image_url = $9,
+           status = $6,
+           image_url = $7,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
-                 description, image_url, created_at, updated_at`,
+       RETURNING id, sku_code, name, product_type, brand, status,
+                 image_url, created_at, updated_at`,
       [
         id,
         data.skuCode,
         data.name,
         data.productType,
         data.brand ?? null,
-        data.couponCode ?? null,
         data.status,
-        data.description ?? null,
         data.imageUrl ?? null,
       ]
     );
@@ -232,8 +218,8 @@ export const productRepository = {
       `UPDATE products
        SET status = $2, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, sku_code, name, product_type, brand, coupon_code, status,
-                 description, image_url, created_at, updated_at`,
+       RETURNING id, sku_code, name, product_type, brand, status,
+                 image_url, created_at, updated_at`,
       [id, status]
     );
     return result.rows[0] ? mapProductRow(result.rows[0]) : null;

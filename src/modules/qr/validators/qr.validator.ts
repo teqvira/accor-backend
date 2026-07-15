@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  DEFAULT_QR_LABEL_COLOR,
+  DEFAULT_QR_LABEL_SHAPE,
+  QR_LABEL_COLORS,
+  QR_LABEL_SHAPES,
+} from '../constants/qr-label.constants';
 
 function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess(
@@ -18,8 +24,9 @@ export const createBatchSchema = z
   .object({
     productId: z.string().min(1, 'Product is required'),
     totalQrs: z.coerce.number().int().min(1).max(500000),
-    description: z.string().trim().max(5000).optional(),
     status: z.enum(['active', 'inactive']).default('active'),
+    shape: z.enum(QR_LABEL_SHAPES).default(DEFAULT_QR_LABEL_SHAPE),
+    color: z.enum(QR_LABEL_COLORS).default(DEFAULT_QR_LABEL_COLOR),
     ...batchRewardFields,
   })
   .refine(

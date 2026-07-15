@@ -118,7 +118,8 @@ export class RedemptionService {
         batch.walletAmount,
         updatedQr._id,
         `QR redemption: ${code}`,
-        client
+        client,
+        'qr_redemption'
       );
 
       await rewardsService.creditInSession(
@@ -126,16 +127,19 @@ export class RedemptionService {
         batch.rewardPoints,
         updatedQr._id,
         `QR redemption: ${code}`,
-        client
+        client,
+        'qr_redemption'
       );
 
       const redemptionTx = await redemptionTransactionRepository.create(
         {
           userId,
           qrCodeId: updatedQr._id,
+          batchId: batch._id,
           productId: batch.productId!,
           walletAmount: batch.walletAmount,
           rewardPoints: batch.rewardPoints,
+          redeemedAt: updatedQr.redeemedAt,
         },
         client
       );

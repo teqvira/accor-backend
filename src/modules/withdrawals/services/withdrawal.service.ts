@@ -31,8 +31,10 @@ function sanitizeProfile(profile: IPayoutProfile) {
     method: profile.method,
     accountHolderName: profile.accountHolderName,
     upiId: profile.upiId,
+    bankName: profile.bankName,
     accountNumberMasked: maskAccountNumber(profile.accountNumber),
     ifsc: profile.ifsc,
+    isDefault: profile.isDefault,
     provider: profile.provider,
     updatedAt: profile.updatedAt,
   };
@@ -47,8 +49,9 @@ function sanitizeWithdrawal(withdrawal: IWithdrawal) {
     provider: withdrawal.provider,
     payoutDestination: withdrawal.payoutDestination,
     failureReason: withdrawal.failureReason,
+    requestedAt: withdrawal.requestedAt,
+    processedAt: withdrawal.processedAt,
     createdAt: withdrawal.createdAt,
-    updatedAt: withdrawal.updatedAt,
   };
 }
 
@@ -167,6 +170,7 @@ export class WithdrawalService {
       const createdWithdrawal = await withdrawalRepository.create(
         {
           userId,
+          payoutProfileId: profile._id,
           amount: input.amount,
           method: profile.method,
           status: WithdrawalStatus.PENDING,
@@ -182,14 +186,16 @@ export class WithdrawalService {
         input.amount,
         createdWithdrawal._id,
         `Wallet withdrawal ${referenceId}`,
-        client
+        client,
+        'withdrawal'
       );
 
       return createdWithdrawal;
     });
 
     try {
-      const payoutProvider = getPayoutProvider(profile.provider);
+      const providerName = profile.provider ?? getActivePayoutProvider();
+      const payoutProvider = getPayoutProvider(providerName);
       const payout = await payoutProvider.createPayout(
         profile,
         input.amount,
@@ -247,7 +253,8 @@ export class WithdrawalService {
         current.amount,
         current._id,
         `Withdrawal refund ${current.providerReferenceId}`,
-        client
+        client,
+        'withdrawal'
       );
     });
   }
