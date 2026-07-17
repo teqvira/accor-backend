@@ -14,9 +14,12 @@ function sanitizeProduct(product: IProduct) {
     name: product.name,
     productType: product.productType,
     brand: product.brand,
+    description: product.description,
+    color: product.color,
     status: product.status,
     imageUrl: product.imageUrl,
     activeCoupons: product.activeCoupons ?? 0,
+    totalCouponGenerated: product.totalCouponGenerated ?? product.activeCoupons ?? 0,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -51,11 +54,17 @@ export class ProductsService {
       name: input.name,
       productType: input.productType,
       brand: input.brand,
+      description: input.description,
+      color: input.color,
       status: input.status ?? 'active',
       imageUrl: input.imageUrl,
     });
 
-    return sanitizeProduct({ ...product, activeCoupons: 0 });
+    return sanitizeProduct({
+      ...product,
+      activeCoupons: 0,
+      totalCouponGenerated: 0,
+    });
   }
 
   async list(page = 1, limit = 20, filters: ProductListFilters = {}) {
@@ -98,6 +107,11 @@ export class ProductsService {
       name: input.name ?? product.name,
       productType: input.productType ?? product.productType,
       brand: input.brand !== undefined ? input.brand : product.brand ?? null,
+      description:
+        input.description !== undefined
+          ? input.description
+          : product.description ?? null,
+      color: input.color !== undefined ? input.color : product.color ?? null,
       status: input.status ?? product.status,
       imageUrl: input.imageUrl !== undefined ? input.imageUrl : product.imageUrl ?? null,
     });

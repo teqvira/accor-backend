@@ -53,6 +53,7 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
   return {
     batchId: batch._id,
     batchName: batch.name,
+    couponName: batch.name,
     productName: batch.product?.name ?? '',
     productSku: batch.product?.skuCode ?? '',
     productImageUrl: batch.product?.imageUrl,
@@ -62,7 +63,7 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
     pdfExportUrl: buildPdfExportUrl(batch._id),
     couponStatus: resolveCouponStatus(batch),
     totalQrs: batch.totalQrs,
-    walletAmount: batch.walletAmount,
+    couponValue: batch.walletAmount,
     rewardPoints: batch.rewardPoints,
     shape: batch.labelShape,
     color: batch.labelColor,
@@ -99,13 +100,13 @@ export class QrBatchService {
 
   async createBatch(input: CreateBatchInput) {
     await this.getActiveProductForBatch(input.productId);
-    const batchName = await generateNextBatchLabel();
+    const batchName = input.couponName.trim() || (await generateNextBatchLabel());
 
     const batch = await qrBatchRepository.create({
       name: batchName,
       totalQrs: input.totalQrs,
       productId: input.productId,
-      walletAmount: input.walletAmount,
+      walletAmount: input.couponValue,
       rewardPoints: input.rewardPoints,
       startDate: input.startDate,
       endDate: input.endDate,

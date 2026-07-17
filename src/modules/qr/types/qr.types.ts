@@ -54,7 +54,8 @@ export interface IQrCode {
 export interface CreateBatchInput {
   productId: string;
   totalQrs: number;
-  walletAmount: number;
+  couponName: string;
+  couponValue: number;
   rewardPoints: number;
   startDate?: string;
   endDate?: string;
@@ -72,6 +73,7 @@ export interface QrCodeListFilters {
 export interface QrBatchListItem {
   batchId: string;
   batchName: string;
+  couponName: string;
   productName: string;
   productSku: string;
   productImageUrl?: string;
@@ -81,7 +83,7 @@ export interface QrBatchListItem {
   pdfExportUrl: string;
   couponStatus: CouponDisplayStatus;
   totalQrs: number;
-  walletAmount: number;
+  couponValue: number;
   rewardPoints: number;
   shape: QrLabelShape;
   color: QrLabelColor;

@@ -11,29 +11,46 @@ interface ProductRow {
   name: string;
   product_type: ProductType;
   brand: string | null;
+  description: string | null;
+  color: string | null;
   status: ProductStatus;
   image_url: string | null;
   created_at: Date;
   updated_at: Date;
   active_coupons?: string | number;
+  total_coupon_generated?: string | number;
 }
 
 const PRODUCT_LIST_COLUMNS = `
-  p.id, p.sku_code, p.name, p.product_type, p.brand, p.status,
-  p.image_url, p.created_at, p.updated_at
+  p.id, p.sku_code, p.name, p.product_type, p.brand, p.description, p.color,
+  p.status, p.image_url, p.created_at, p.updated_at
+`;
+
+const PRODUCT_RETURNING = `
+  id, sku_code, name, product_type, brand, description, color, status,
+  image_url, created_at, updated_at
 `;
 
 export function mapProductRow(row: ProductRow): IProduct {
+  const couponCount =
+    row.total_coupon_generated !== undefined
+      ? Number(row.total_coupon_generated)
+      : row.active_coupons !== undefined
+        ? Number(row.active_coupons)
+        : undefined;
+
   return {
     _id: row.id,
     skuCode: row.sku_code,
     name: row.name,
     productType: row.product_type,
     brand: row.brand ?? undefined,
+    description: row.description ?? undefined,
+    color: row.color ?? undefined,
     status: row.status,
     imageUrl: row.image_url ?? undefined,
-    activeCoupons:
-      row.active_coupons !== undefined ? Number(row.active_coupons) : undefined,
+    activeCoupons: couponCount,
+    totalCouponGenerated: couponCount,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -44,6 +61,8 @@ export interface CreateProductData {
   name: string;
   productType: ProductType;
   brand?: string;
+  description?: string;
+  color?: string;
   status?: ProductStatus;
   imageUrl?: string;
 }
@@ -53,6 +72,8 @@ export interface UpdateProductData {
   name?: string;
   productType?: ProductType;
   brand?: string | null;
+  description?: string | null;
+  color?: string | null;
   status?: ProductStatus;
   imageUrl?: string | null;
 }
@@ -98,15 +119,16 @@ export const productRepository = {
   create: async (data: CreateProductData): Promise<IProduct> => {
     const result = await pool.query<ProductRow>(
       `INSERT INTO products
-         (sku_code, name, product_type, brand, status, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, sku_code, name, product_type, brand, status,
-                 image_url, created_at, updated_at`,
+         (sku_code, name, product_type, brand, description, color, status, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING ${PRODUCT_RETURNING}`,
       [
         data.skuCode,
         data.name,
         data.productType,
         data.brand ?? null,
+        data.description ?? null,
+        data.color ?? null,
         data.status ?? 'active',
         data.imageUrl ?? null,
       ]
@@ -117,6 +139,7 @@ export const productRepository = {
   findById: async (id: string): Promise<IProduct | null> => {
     const result = await pool.query<ProductRow>(
       `SELECT ${PRODUCT_LIST_COLUMNS},
+              COALESCE(SUM(b.generated_count), 0)::text AS total_coupon_generated,
               COALESCE(SUM(b.generated_count), 0)::text AS active_coupons
        FROM products p
        LEFT JOIN qr_batches b ON b.product_id = p.id
@@ -129,8 +152,7 @@ export const productRepository = {
 
   findBySkuCode: async (skuCode: string): Promise<IProduct | null> => {
     const result = await pool.query<ProductRow>(
-      `SELECT id, sku_code, name, product_type, brand, status,
-              image_url, created_at, updated_at
+      `SELECT ${PRODUCT_RETURNING}
        FROM products WHERE sku_code = $1`,
       [skuCode]
     );
@@ -148,6 +170,7 @@ export const productRepository = {
     const [itemsResult, countResult] = await Promise.all([
       pool.query<ProductRow>(
         `SELECT ${PRODUCT_LIST_COLUMNS},
+                COALESCE(SUM(b.generated_count), 0)::text AS total_coupon_generated,
                 COALESCE(SUM(b.generated_count), 0)::text AS active_coupons
          FROM products p
          LEFT JOIN qr_batches b ON b.product_id = p.id
@@ -191,18 +214,21 @@ export const productRepository = {
            name = $3,
            product_type = $4,
            brand = $5,
-           status = $6,
-           image_url = $7,
+           description = $6,
+           color = $7,
+           status = $8,
+           image_url = $9,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, sku_code, name, product_type, brand, status,
-                 image_url, created_at, updated_at`,
+       RETURNING ${PRODUCT_RETURNING}`,
       [
         id,
         data.skuCode,
         data.name,
         data.productType,
         data.brand ?? null,
+        data.description ?? null,
+        data.color ?? null,
         data.status,
         data.imageUrl ?? null,
       ]
@@ -218,8 +244,7 @@ export const productRepository = {
       `UPDATE products
        SET status = $2, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, sku_code, name, product_type, brand, status,
-                 image_url, created_at, updated_at`,
+       RETURNING ${PRODUCT_RETURNING}`,
       [id, status]
     );
     return result.rows[0] ? mapProductRow(result.rows[0]) : null;

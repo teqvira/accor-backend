@@ -28,6 +28,8 @@ const productBaseSchema = z.object({
   name: z.string().trim().min(2).max(PRODUCT_TEXT_MAX_LENGTH),
   productType: z.enum(PRODUCT_TYPES),
   brand: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
+  description: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
+  color: z.string().trim().max(100).optional(),
   status: z.enum(PRODUCT_STATUSES).default('active'),
   imageUrl: productImageUrlSchema.optional(),
 });
@@ -38,6 +40,13 @@ export const updateProductSchema = productBaseSchema
   .partial()
   .extend({
     brand: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).nullable().optional(),
+    description: z
+      .string()
+      .trim()
+      .max(PRODUCT_TEXT_MAX_LENGTH)
+      .nullable()
+      .optional(),
+    color: z.string().trim().max(100).nullable().optional(),
     imageUrl: z.union([z.null(), productImageUrlSchema]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

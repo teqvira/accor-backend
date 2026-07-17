@@ -169,6 +169,65 @@ export const userRepository = {
     );
   },
 
+  findAll: async (
+    page = 1,
+    limit = 20,
+    filters: {
+      role?: UserRole;
+      isActive?: boolean;
+      isVerified?: boolean;
+      search?: string;
+    } = {}
+  ): Promise<{ items: IUser[]; total: number }> => {
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters.role) {
+      conditions.push(`role = $${paramIndex++}`);
+      values.push(filters.role);
+    }
+    if (filters.isActive !== undefined) {
+      conditions.push(`is_active = $${paramIndex++}`);
+      values.push(filters.isActive);
+    }
+    if (filters.isVerified !== undefined) {
+      conditions.push(`is_verified = $${paramIndex++}`);
+      values.push(filters.isVerified);
+    }
+    if (filters.search) {
+      conditions.push(
+        `(name ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR mobile_number ILIKE $${paramIndex})`
+      );
+      values.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const offset = (page - 1) * limit;
+
+    const [itemsResult, countResult] = await Promise.all([
+      pool.query<UserRow>(
+        `SELECT ${USER_PUBLIC_COLUMNS}
+         FROM users
+         ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+        [...values, limit, offset]
+      ),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users ${whereClause}`,
+        values
+      ),
+    ]);
+
+    return {
+      items: itemsResult.rows.map(mapUserRow),
+      total: Number(countResult.rows[0]?.count ?? 0),
+    };
+  },
+
   countAdmins: async (): Promise<number> => {
     const result = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users

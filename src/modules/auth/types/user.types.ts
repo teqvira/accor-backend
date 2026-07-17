@@ -62,8 +62,8 @@ export interface CreateUserData {
 
 export interface UpdateUserData {
   name?: string;
-  email?: string;
-  mobileNumber?: string;
+  email?: string | null;
+  mobileNumber?: string | null;
   password?: string;
   role?: UserRole;
   isActive?: boolean;

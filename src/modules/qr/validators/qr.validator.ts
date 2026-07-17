@@ -14,7 +14,7 @@ function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
 }
 
 const batchRewardFields = {
-  walletAmount: z.coerce.number().min(0),
+  couponValue: z.coerce.number().min(0),
   rewardPoints: z.coerce.number().min(0),
   startDate: emptyToUndefined(z.string().min(1).optional()),
   endDate: emptyToUndefined(z.string().min(1).optional()),
@@ -23,12 +23,14 @@ const batchRewardFields = {
 export const createBatchSchema = z
   .object({
     productId: z.string().min(1, 'Product is required'),
+    couponName: z.string().trim().min(1, 'Coupon name is required').max(255),
     totalQrs: z.coerce.number().int().min(1).max(500000),
     status: z.enum(['active', 'inactive']).default('active'),
     shape: z.enum(QR_LABEL_SHAPES).default(DEFAULT_QR_LABEL_SHAPE),
     color: z.enum(QR_LABEL_COLORS).default(DEFAULT_QR_LABEL_COLOR),
     ...batchRewardFields,
   })
+  .strict()
   .refine(
     (data) => {
       if (data.startDate && data.endDate) {
