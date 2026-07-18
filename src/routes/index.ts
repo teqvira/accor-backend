@@ -1,15 +1,15 @@
 import { Express } from 'express';
 import rateLimit from 'express-rate-limit';
-import { authRoutes } from '../modules/auth';
-import { uploadRoutes } from '../modules/file-upload';
-import { qrRoutes } from '../modules/qr';
-import { redemptionRoutes } from '../modules/redemption';
-import { rewardsRoutes } from '../modules/rewards';
-import { transactionsRoutes } from '../modules/transactions';
-import { productsRoutes } from '../modules/products';
-import { usersRoutes } from '../modules/users';
-import { payoutWebhookRoutes, withdrawalRoutes } from '../modules/withdrawals';
-import { walletRoutes } from '../modules/wallet';
+import { authRoutes } from '../modules/auth/index';
+import { uploadRoutes } from '../modules/file-upload/index';
+import { qrRoutes } from '../modules/qr/index';
+import { redemptionRoutes } from '../modules/redemption/index';
+import { rewardsRoutes } from '../modules/rewards/index';
+import { transactionsRoutes } from '../modules/transactions/index';
+import { productsRoutes } from '../modules/products/index';
+import { usersRoutes } from '../modules/users/index';
+import { payoutWebhookRoutes, withdrawalRoutes } from '../modules/withdrawals/index';
+import { walletRoutes } from '../modules/wallet/index';
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

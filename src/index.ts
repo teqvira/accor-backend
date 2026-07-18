@@ -1,7 +1,7 @@
 import app from './app';
 import { env } from './config/env';
 import pool from './database/connection';
-import { bootstrapAdmin } from './modules/auth';
+import { bootstrapAdmin } from './modules/auth/index';
 
 const startServer = async () => {
   try {

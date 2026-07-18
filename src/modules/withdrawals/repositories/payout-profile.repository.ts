@@ -1,9 +1,9 @@
 import pool from '../../../database/connection';
-import { PayoutProviderName } from '../constants/withdrawal.constants';
+import { PayoutProviderName } from '../withdrawal.constants';
 import {
   IPayoutProfile,
   UpdatePayoutProfileData,
-} from '../types/withdrawal.types';
+} from '../withdrawal.types';
 
 interface PayoutProfileRow {
   id: string;

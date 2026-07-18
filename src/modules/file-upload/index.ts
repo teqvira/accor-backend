@@ -1,1 +1,1 @@
-export { default as uploadRoutes } from './routes/uploadRoutes';
+export { default as uploadRoutes } from './file-upload.routes';

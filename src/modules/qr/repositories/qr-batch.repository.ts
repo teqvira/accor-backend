@@ -5,7 +5,7 @@ import {
   QrLabelColor,
   QrLabelShape,
 } from '../constants/qr-label.constants';
-import { IQrBatch, QrBatchStatus } from '../types/qr.types';
+import { IQrBatch, QrBatchStatus } from '../qr.types';
 
 interface QrBatchRow {
   id: string;

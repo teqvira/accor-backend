@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../../shared/utils/response';
-import { withdrawalService } from '../services/withdrawal.service';
+import { withdrawalService } from '../withdrawal.service';
 
 export class WebhookController {
   async razorpayPayout(req: Request, res: Response): Promise<void> {

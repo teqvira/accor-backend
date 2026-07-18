@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import { PayoutProviderName } from '../modules/withdrawals/constants/withdrawal.constants';
+import { PayoutProviderName } from '../modules/withdrawals/withdrawal.constants';
 
 dotenv.config();
 

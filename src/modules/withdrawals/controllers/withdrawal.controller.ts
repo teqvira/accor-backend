@@ -1,8 +1,8 @@
 import { Response } from 'express';
 import { getQueryNumber } from '../../../shared/utils/params';
 import { sendSuccess } from '../../../shared/utils/response';
-import { AuthRequest } from '../../auth/types/auth.types';
-import { withdrawalService } from '../services/withdrawal.service';
+import { AuthRequest } from '../../auth/auth.types';
+import { withdrawalService } from '../withdrawal.service';
 
 export class WithdrawalController {
   async savePayoutProfile(req: AuthRequest, res: Response): Promise<void> {

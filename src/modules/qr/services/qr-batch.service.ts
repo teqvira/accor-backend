@@ -1,6 +1,6 @@
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
-import { productsService } from '../../products/services/products.service';
-import { productRepository } from '../../products/repositories/product.repository';
+import { productsService } from '../../products/products.service';
+import { productRepository } from '../../products/product.repository';
 import { qrBatchRepository } from '../repositories/qr-batch.repository';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
 import {
@@ -15,7 +15,7 @@ import {
   QrBatchListItem,
   QrBatchStatus,
   QrCodeListFilters,
-} from '../types/qr.types';
+} from '../qr.types';
 import { generateCodesForBatch } from './qr-generation.service';
 import { generateNextBatchLabel } from '../utils/generate-batch-name';
 

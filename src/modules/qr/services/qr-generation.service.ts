@@ -1,7 +1,7 @@
 import { customAlphabet } from 'nanoid';
 import { env } from '../../../config/env';
 import { qrCodeRepository } from '../repositories/qr-code.repository';
-import { IQrBatch } from '../types/qr.types';
+import { IQrBatch } from '../qr.types';
 
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const generateCode = customAlphabet(ALPHABET, env.QR_CODE_LENGTH);

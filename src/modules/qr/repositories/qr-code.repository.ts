@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg';
 import pool from '../../../database/connection';
-import { IQrCode, QrCodeListFilters } from '../types/qr.types';
+import { IQrCode, QrCodeListFilters } from '../qr.types';
 
 interface QrCodeRow {
   id: string;

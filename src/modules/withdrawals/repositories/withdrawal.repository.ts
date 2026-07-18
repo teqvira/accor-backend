@@ -1,10 +1,10 @@
 import { PoolClient } from 'pg';
 import pool from '../../../database/connection';
-import { PayoutMethod, WithdrawalStatus } from '../constants/withdrawal.constants';
+import { PayoutMethod, WithdrawalStatus } from '../withdrawal.constants';
 import {
   CreateWithdrawalData,
   IWithdrawal,
-} from '../types/withdrawal.types';
+} from '../withdrawal.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 

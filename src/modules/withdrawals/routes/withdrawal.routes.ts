@@ -1,13 +1,13 @@
 import { Response, Router } from 'express';
 import { validate } from '../../../shared/middleware/validate';
-import { authenticate, requireRoles } from '../../auth/middleware/auth.middleware';
-import { UserRole } from '../../auth';
-import { AuthRequest } from '../../auth/types/auth.types';
+import { authenticate, requireRoles } from '../../auth/auth.middleware';
+import { UserRole } from '../../auth/index';
+import { AuthRequest } from '../../auth/auth.types';
 import { withdrawalController } from '../controllers/withdrawal.controller';
 import {
   createWithdrawalSchema,
   savePayoutProfileSchema,
-} from '../validators/withdrawal.validator';
+} from '../withdrawal.validator';
 
 const router = Router();
 

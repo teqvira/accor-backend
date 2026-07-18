@@ -1,2 +1,2 @@
-export { default as usersRoutes } from './routes/users.routes';
-export { usersService } from './services/users.service';
+export { default as usersRoutes } from './users.routes';
+export { usersService } from './users.service';

@@ -6,7 +6,7 @@ import {
   mapUserRow,
   UpdateUserData,
   UserRole,
-} from '../types/user.types';
+} from '../user.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 

@@ -1,2 +1,2 @@
-export { default as redemptionRoutes } from './routes/redemption.routes';
-export { redemptionService } from './services/redemption.service';
+export { default as redemptionRoutes } from './redemption.routes';
+export { redemptionService } from './redemption.service';

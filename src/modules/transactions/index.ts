@@ -1,4 +1,4 @@
-export { default as transactionsRoutes } from './routes/transactions.routes';
-export { transactionsService } from './services/transactions.service';
-export { redemptionTransactionRepository } from './repositories/redemption-transaction.repository';
-export type { IRedemptionTransaction } from './types/redemption-transaction.types';
+export { default as transactionsRoutes } from './transactions.routes';
+export { transactionsService } from './transactions.service';
+export { redemptionTransactionRepository } from './redemption-transaction.repository';
+export type { IRedemptionTransaction } from './redemption-transaction.types';
