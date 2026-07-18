@@ -32,6 +32,7 @@ export interface IQrBatch {
     skuCode: string;
     name: string;
     imageUrl?: string;
+    color?: string;
   };
   stats?: {
     generated: number;
@@ -54,14 +55,14 @@ export interface IQrCode {
 export interface CreateBatchInput {
   productId: string;
   totalQrs: number;
-  couponName: string;
+  couponName?: string;
   couponValue: number;
   rewardPoints: number;
   startDate?: string;
   endDate?: string;
   status?: 'active' | 'inactive';
   shape?: QrLabelShape;
-  color?: QrLabelColor;
+  color: QrLabelColor;
   createdBy?: string;
 }
 

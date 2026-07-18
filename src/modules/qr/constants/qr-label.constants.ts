@@ -21,6 +21,35 @@ export const QR_LABEL_COLOR_HEX: Record<QrLabelColor, string> = {
   signature_burgundy: '#6B1F3A',
 };
 
+export const QR_LABEL_COLOR_LABELS: Record<QrLabelColor, string> = {
+  performance_green: 'Performance Green',
+  heavy_duty_blue: 'Heavy Duty Blue',
+  industrial_bronze: 'Industrial Bronze',
+  premium_gold: 'Premium Gold',
+  professional_graphite: 'Professional Graphite',
+  signature_burgundy: 'Signature Burgundy',
+};
+
+/** Accepts slug (`performance_green`) or display label (`Performance Green`). */
+export function parseQrLabelColor(
+  value?: string | null
+): QrLabelColor | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const slug = trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+  if ((QR_LABEL_COLORS as readonly string[]).includes(slug)) {
+    return slug as QrLabelColor;
+  }
+
+  const lower = trimmed.toLowerCase();
+  return QR_LABEL_COLORS.find(
+    (color) => QR_LABEL_COLOR_LABELS[color].toLowerCase() === lower
+  );
+}
+
 /** Physical label sizes in PDF points (1 pt = 1/72"). */
 export const QR_LABEL_DIMENSIONS: Record<
   QrLabelShape,

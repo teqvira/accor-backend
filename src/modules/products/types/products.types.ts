@@ -18,7 +18,7 @@ export interface IProduct {
 
 export interface CreateProductInput {
   skuCode: string;
-  name: string;
+  name?: string;
   productType: ProductType;
   brand?: string;
   description?: string;

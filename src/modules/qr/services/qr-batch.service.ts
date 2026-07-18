@@ -6,6 +6,7 @@ import { qrCodeRepository } from '../repositories/qr-code.repository';
 import {
   DEFAULT_QR_LABEL_COLOR,
   DEFAULT_QR_LABEL_SHAPE,
+  QrLabelColor,
 } from '../constants/qr-label.constants';
 import {
   CouponDisplayStatus,
@@ -24,6 +25,10 @@ function buildPdfExportUrl(batchId: string): string {
 
 function formatDate(date?: Date): string | undefined {
   return date ? date.toISOString() : undefined;
+}
+
+function resolveBatchColor(batch: IQrBatch): QrLabelColor {
+  return batch.labelColor ?? DEFAULT_QR_LABEL_COLOR;
 }
 
 function resolveCouponStatus(batch: IQrBatch): CouponDisplayStatus {
@@ -66,7 +71,7 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
     couponValue: batch.walletAmount,
     rewardPoints: batch.rewardPoints,
     shape: batch.labelShape,
-    color: batch.labelColor,
+    color: resolveBatchColor(batch),
     startDate: formatDate(batch.startDate),
     endDate: formatDate(batch.endDate),
     createdAt: batch.createdAt,
@@ -100,7 +105,9 @@ export class QrBatchService {
 
   async createBatch(input: CreateBatchInput) {
     await this.getActiveProductForBatch(input.productId);
-    const batchName = input.couponName.trim() || (await generateNextBatchLabel());
+    const batchName =
+      input.couponName?.trim() || (await generateNextBatchLabel());
+    const labelColor = input.color ?? DEFAULT_QR_LABEL_COLOR;
 
     const batch = await qrBatchRepository.create({
       name: batchName,
@@ -114,7 +121,7 @@ export class QrBatchService {
       generatedCount: 0,
       status: QrBatchStatus.DRAFT,
       labelShape: input.shape ?? DEFAULT_QR_LABEL_SHAPE,
-      labelColor: input.color ?? DEFAULT_QR_LABEL_COLOR,
+      labelColor,
       createdBy: input.createdBy,
     });
 

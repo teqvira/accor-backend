@@ -27,6 +27,7 @@ interface QrBatchRow {
   product_sku_code?: string | null;
   product_name?: string | null;
   product_image_url?: string | null;
+  product_color?: string | null;
   redeemed_count?: string | number;
   pending_count?: string | number;
 }
@@ -69,6 +70,7 @@ export function mapQrBatchRow(row: QrBatchRow): IQrBatch {
       skuCode: row.product_sku_code,
       name: row.product_name,
       imageUrl: row.product_image_url ?? undefined,
+      color: row.product_color ?? undefined,
     };
   }
 
@@ -132,7 +134,8 @@ export const qrBatchRepository = {
       `SELECT ${BATCH_COLUMNS},
               p.sku_code AS product_sku_code,
               p.name AS product_name,
-              p.image_url AS product_image_url
+              p.image_url AS product_image_url,
+              p.color AS product_color
        FROM qr_batches b
        LEFT JOIN products p ON p.id = b.product_id
        WHERE b.id = $1`,
@@ -152,12 +155,13 @@ export const qrBatchRepository = {
                 p.sku_code AS product_sku_code,
                 p.name AS product_name,
                 p.image_url AS product_image_url,
+                p.color AS product_color,
                 COUNT(qc.id) FILTER (WHERE qc.redeemed = true)::text AS redeemed_count,
                 COUNT(qc.id) FILTER (WHERE qc.redeemed = false)::text AS pending_count
          FROM qr_batches b
          LEFT JOIN products p ON p.id = b.product_id
          LEFT JOIN qr_codes qc ON qc.batch_id = b.id
-         GROUP BY b.id, p.sku_code, p.name, p.image_url
+         GROUP BY b.id, p.sku_code, p.name, p.image_url, p.color
          ORDER BY b.created_at DESC
          LIMIT $1 OFFSET $2`,
         [limit, offset]

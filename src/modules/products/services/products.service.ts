@@ -51,7 +51,7 @@ export class ProductsService {
 
     const product = await productRepository.create({
       skuCode: input.skuCode,
-      name: input.name,
+      name: input.name?.trim() || input.skuCode,
       productType: input.productType,
       brand: input.brand,
       description: input.description,

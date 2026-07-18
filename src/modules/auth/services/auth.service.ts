@@ -85,6 +85,30 @@ async function issueTokenPair(user: IUser) {
   return { accessToken, refreshToken };
 }
 
+async function buildTokenPair(user: IUser) {
+  const tokenId = uuidv4();
+  const accessToken = signAccessToken({
+    sub: user._id,
+    email: user.email,
+    mobileNumber: user.mobileNumber,
+    role: user.role,
+  });
+  const refreshToken = signRefreshToken({
+    sub: user._id,
+    tokenId,
+  });
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  return {
+    accessToken,
+    refreshToken,
+    tokenHash: await hashRefreshToken(refreshToken),
+    expiresAt,
+  };
+}
+
 async function issueOtp(params: {
   mobileNumber?: string | null;
   email?: string | null;
@@ -322,7 +346,7 @@ export class AuthService {
     }
 
     const tokenHash = await hashRefreshToken(refreshToken);
-    const stored = await refreshTokenRepository.findByUserAndHash(
+    const stored = await refreshTokenRepository.findAnyByUserAndHash(
       payload.sub,
       tokenHash
     );
@@ -334,14 +358,22 @@ export class AuthService {
       );
     }
 
+    if (stored.revoked) {
+      // Reuse of a blocked token — invalidate all sessions for safety
+      await refreshTokenRepository.revokeManyByUserId(payload.sub);
+      throw new UnauthorizedError(
+        'Your session has expired. Please log in again',
+        `refreshToken: blocked/revoked token reused for userId=${payload.sub}`
+      );
+    }
+
     if (stored.expiresAt < new Date()) {
+      await refreshTokenRepository.revokeById(stored._id);
       throw new UnauthorizedError(
         'Your session has expired. Please log in again',
         `refreshToken: token expired at ${stored.expiresAt.toISOString()} for userId=${payload.sub}`
       );
     }
-
-    await refreshTokenRepository.deleteById(stored._id);
 
     const user = await userRepository.findById(payload.sub);
     if (!user) {
@@ -358,7 +390,34 @@ export class AuthService {
       );
     }
 
-    return issueTokenPair(user);
+    const next = await buildTokenPair(user);
+
+    try {
+      await refreshTokenRepository.rotate({
+        oldTokenId: stored._id,
+        userId: user._id,
+        newTokenHash: next.tokenHash,
+        newExpiresAt: next.expiresAt,
+      });
+    } catch (err) {
+      const code = err instanceof Error ? err.message : 'unknown';
+      if (
+        code === 'REFRESH_TOKEN_REVOKED' ||
+        code === 'REFRESH_TOKEN_EXPIRED' ||
+        code === 'REFRESH_TOKEN_MISSING'
+      ) {
+        throw new UnauthorizedError(
+          'Your session has expired. Please log in again',
+          `refreshToken: rotate failed (${code}) for userId=${payload.sub}`
+        );
+      }
+      throw err;
+    }
+
+    return {
+      accessToken: next.accessToken,
+      refreshToken: next.refreshToken,
+    };
   }
 
   async logout(refreshToken: string) {

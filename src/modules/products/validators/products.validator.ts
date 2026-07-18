@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { isOwnBucketObjectUrl } from '../../file-upload/utils/s3Object';
 import {
+  parseQrLabelColor,
+  QR_LABEL_COLORS,
+} from '../../qr/constants/qr-label.constants';
+import {
   PRODUCT_STATUSES,
   PRODUCT_TEXT_MAX_LENGTH,
   PRODUCT_TYPES,
@@ -19,17 +23,25 @@ const productImageUrlSchema = z
   .url('Image URL must be valid')
   .refine(isOwnBucketObjectUrl, 'Image URL must be an uploaded product image');
 
+const productColorSchema = z.preprocess((val) => {
+  if (val === '' || val === null || val === undefined) return undefined;
+  if (typeof val !== 'string') return val;
+  return parseQrLabelColor(val) ?? val;
+}, z.enum(QR_LABEL_COLORS, { message: 'Invalid product color code' }));
+
 const productBaseSchema = z.object({
   skuCode: z
     .string()
     .trim()
     .min(1, 'SKU code is required')
     .max(PRODUCT_TEXT_MAX_LENGTH),
-  name: z.string().trim().min(2).max(PRODUCT_TEXT_MAX_LENGTH),
+  name: emptyToUndefined(
+    z.string().trim().min(2).max(PRODUCT_TEXT_MAX_LENGTH).optional()
+  ),
   productType: z.enum(PRODUCT_TYPES),
   brand: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
   description: z.string().trim().max(PRODUCT_TEXT_MAX_LENGTH).optional(),
-  color: z.string().trim().max(100).optional(),
+  color: productColorSchema,
   status: z.enum(PRODUCT_STATUSES).default('active'),
   imageUrl: productImageUrlSchema.optional(),
 });
@@ -46,7 +58,12 @@ export const updateProductSchema = productBaseSchema
       .max(PRODUCT_TEXT_MAX_LENGTH)
       .nullable()
       .optional(),
-    color: z.string().trim().max(100).nullable().optional(),
+    color: z.preprocess((val) => {
+      if (val === null) return null;
+      if (val === '' || val === undefined) return undefined;
+      if (typeof val !== 'string') return val;
+      return parseQrLabelColor(val) ?? val;
+    }, z.enum(QR_LABEL_COLORS).nullable().optional()),
     imageUrl: z.union([z.null(), productImageUrlSchema]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
