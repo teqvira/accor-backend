@@ -59,7 +59,8 @@ export const QR_LABEL_DIMENSIONS: Record<
   square: { width: 108, height: 72 },
 };
 
-export const QR_LABEL_TAGLINE = "YOUR ENGINE'S BEST FRIEND...";
+export const QR_LABEL_TAGLINE = "YOUR ENGINE'S BEST FRIENDS";
+export const QR_LABEL_BRAND_NAME = 'ACCOR';
 
 export const DEFAULT_QR_LABEL_SHAPE: QrLabelShape = 'cap';
 export const DEFAULT_QR_LABEL_COLOR: QrLabelColor = 'performance_green';

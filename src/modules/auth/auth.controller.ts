@@ -1,7 +1,29 @@
 import { Response } from 'express';
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from './auth.types';
-import { authService } from './auth.service';
+import { authService, DeviceSessionContext } from './auth.service';
+
+function deviceContextFromRequest(
+  req: AuthRequest,
+  body: Partial<DeviceSessionContext> = {}
+): DeviceSessionContext {
+  const forwarded = req.headers['x-forwarded-for'];
+  const ipFromForwarded =
+    typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined;
+
+  return {
+    deviceToken: body.deviceToken,
+    platform: body.platform,
+    deviceId: body.deviceId,
+    deviceName: body.deviceName,
+    appVersion: body.appVersion,
+    ipAddress: ipFromForwarded || req.ip,
+    userAgent:
+      typeof req.headers['user-agent'] === 'string'
+        ? req.headers['user-agent']
+        : undefined,
+  };
+}
 
 export class AuthController {
   async createUser(req: AuthRequest, res: Response): Promise<void> {
@@ -10,7 +32,11 @@ export class AuthController {
   }
 
   async login(req: AuthRequest, res: Response): Promise<void> {
-    const result = await authService.login(req.body.email, req.body.password);
+    const result = await authService.login(
+      req.body.email,
+      req.body.password,
+      deviceContextFromRequest(req, req.body)
+    );
     sendSuccess(res, 'Login successful', result);
   }
 
@@ -34,19 +60,31 @@ export class AuthController {
     const result = await authService.verifyMobileOtp(
       req.body.mobileNumber,
       req.body.otp,
-      req.user?.sub
+      req.user?.sub,
+      deviceContextFromRequest(req, req.body)
     );
     sendSuccess(res, 'OTP verified successfully', result);
   }
 
   async refreshToken(req: AuthRequest, res: Response): Promise<void> {
-    const tokens = await authService.refreshToken(req.body.refreshToken);
+    const tokens = await authService.refreshToken(
+      req.body.refreshToken,
+      deviceContextFromRequest(req, req.body)
+    );
     sendSuccess(res, 'Token refreshed successfully', tokens);
   }
 
   async logout(req: AuthRequest, res: Response): Promise<void> {
-    await authService.logout(req.bearerToken!);
+    const refreshToken = req.bearerToken ?? req.body.refreshToken;
+    await authService.logout(refreshToken!, {
+      deviceToken: req.body.deviceToken,
+    });
     sendSuccess(res, 'Logged out successfully');
+  }
+
+  async registerDeviceToken(req: AuthRequest, res: Response): Promise<void> {
+    const device = await authService.registerDeviceToken(req.user!.sub, req.body);
+    sendSuccess(res, 'Device token registered successfully', { device });
   }
 
   async forgotPassword(req: AuthRequest, res: Response): Promise<void> {

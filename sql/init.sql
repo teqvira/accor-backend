@@ -5,3 +5,6 @@
 \i sql/migrations/005_payouts.sql
 \i sql/migrations/006_auth_and_documents.sql
 \i sql/migrations/007_qr_batch_label_style.sql
+\i sql/migrations/008_product_description_color.sql
+\i sql/migrations/009_refresh_token_revoked_at.sql
+\i sql/migrations/010_device_tokens_and_sessions.sql

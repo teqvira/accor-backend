@@ -23,10 +23,43 @@ export const createUserSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  deviceToken: z.string().min(1).max(512).optional(),
+  platform: z.enum(['ios', 'android', 'web', 'unknown']).optional(),
+  deviceId: z.string().min(1).max(255).optional(),
+  deviceName: z.string().min(1).max(255).optional(),
+  appVersion: z.string().min(1).max(50).optional(),
 });
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
+  deviceToken: z.string().min(1).max(512).optional(),
+  platform: z.enum(['ios', 'android', 'web', 'unknown']).optional(),
+  deviceId: z.string().min(1).max(255).optional(),
+  deviceName: z.string().min(1).max(255).optional(),
+  appVersion: z.string().min(1).max(50).optional(),
+});
+
+export const logoutSchema = z.object({
+  refreshToken: z.string().min(1).optional(),
+  deviceToken: z.string().min(1).max(512).optional(),
+});
+
+export const registerDeviceTokenSchema = z.object({
+  deviceToken: z.string().min(1).max(512),
+  platform: z.enum(['ios', 'android', 'web', 'unknown']).optional(),
+  deviceId: z.string().min(1).max(255).optional(),
+  deviceName: z.string().min(1).max(255).optional(),
+  appVersion: z.string().min(1).max(50).optional(),
+});
+
+export const verifyMobileOtpSchema = z.object({
+  mobileNumber: mobileNumberSchema,
+  otp: z.string().min(4).max(8),
+  deviceToken: z.string().min(1).max(512).optional(),
+  platform: z.enum(['ios', 'android', 'web', 'unknown']).optional(),
+  deviceId: z.string().min(1).max(255).optional(),
+  deviceName: z.string().min(1).max(255).optional(),
+  appVersion: z.string().min(1).max(50).optional(),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -50,11 +83,6 @@ export const resetPasswordWithCurrentSchema = z.object({
 
 export const sendMobileOtpSchema = z.object({
   mobileNumber: mobileNumberSchema,
-});
-
-export const verifyMobileOtpSchema = z.object({
-  mobileNumber: mobileNumberSchema,
-  otp: z.string().min(4).max(8),
 });
 
 export const resendMobileOtpSchema = z.object({

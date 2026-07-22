@@ -47,8 +47,8 @@ async function createWithClient(
   }
 ): Promise<IRefreshToken> {
   const result = await client.query<RefreshTokenRow>(
-    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-     VALUES ($1, $2, $3)
+    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, updated_at)
+     VALUES ($1, $2, $3, NOW())
      RETURNING ${TOKEN_COLUMNS}`,
     [data.userId, data.tokenHash, data.expiresAt]
   );
@@ -62,8 +62,8 @@ export const refreshTokenRepository = {
     expiresAt: Date;
   }): Promise<IRefreshToken> => {
     const result = await pool.query<RefreshTokenRow>(
-      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3)
+      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, updated_at)
+       VALUES ($1, $2, $3, NOW())
        RETURNING ${TOKEN_COLUMNS}`,
       [data.userId, data.tokenHash, data.expiresAt]
     );
@@ -136,7 +136,7 @@ export const refreshTokenRepository = {
 
       await client.query(
         `UPDATE refresh_tokens
-         SET revoked = true, revoked_at = NOW()
+         SET revoked = true, revoked_at = NOW(), updated_at = NOW()
          WHERE id = $1`,
         [data.oldTokenId]
       );
@@ -152,7 +152,7 @@ export const refreshTokenRepository = {
   revokeById: async (id: string): Promise<void> => {
     await pool.query(
       `UPDATE refresh_tokens
-       SET revoked = true, revoked_at = NOW()
+       SET revoked = true, revoked_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND revoked = false`,
       [id]
     );
@@ -164,7 +164,7 @@ export const refreshTokenRepository = {
   ): Promise<void> => {
     await pool.query(
       `UPDATE refresh_tokens
-       SET revoked = true, revoked_at = NOW()
+       SET revoked = true, revoked_at = NOW(), updated_at = NOW()
        WHERE user_id = $1 AND token_hash = $2 AND revoked = false`,
       [userId, tokenHash]
     );
@@ -173,7 +173,7 @@ export const refreshTokenRepository = {
   revokeManyByUserId: async (userId: string): Promise<void> => {
     await pool.query(
       `UPDATE refresh_tokens
-       SET revoked = true, revoked_at = NOW()
+       SET revoked = true, revoked_at = NOW(), updated_at = NOW()
        WHERE user_id = $1 AND revoked = false`,
       [userId]
     );

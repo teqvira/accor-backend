@@ -5,7 +5,6 @@ import {
   DEFAULT_QR_LABEL_SHAPE,
   QR_LABEL_COLOR_HEX,
   QR_LABEL_DIMENSIONS,
-  QR_LABEL_TAGLINE,
   QrLabelColor,
   QrLabelShape,
 } from '../constants/qr-label.constants';
@@ -14,6 +13,8 @@ import { qrLabelAssetPaths } from './qr-label.paths';
 const TEXT_WHITE = '#FFFFFF';
 const QR_DARK = '#000000';
 const QR_LIGHT = '#FFFFFF';
+/** Square (1.5"×1") corner radius — matches heavily rounded mock. */
+const SQUARE_CORNER_RATIO = 0.14;
 
 export interface QrLabelMetadata {
   batchId: string;
@@ -32,9 +33,11 @@ export function getLabelSize(shape: QrLabelShape): {
 
 async function createQrImageBuffer(code: string, size: number): Promise<Buffer> {
   const payload = buildQrPayload(code);
+  // Render at 4× then scale down in PDF for a sharp, non-faded QR
+  const px = Math.max(128, Math.round(size * 4));
   return QRCode.toBuffer(payload, {
     type: 'png',
-    width: size,
+    width: px,
     margin: 1,
     errorCorrectionLevel: 'M',
     color: {
@@ -87,21 +90,8 @@ function fillSquareBackground(
   height: number,
   colorHex: string
 ): void {
-  const radius = Math.min(width, height) * 0.08;
+  const radius = Math.min(width, height) * SQUARE_CORNER_RATIO;
   doc.roundedRect(x, y, width, height, radius).fill(colorHex);
-}
-
-function drawAccorMark(
-  doc: PDFKit.PDFDocument,
-  cx: number,
-  topY: number,
-  markHeight: number
-): void {
-  const iconSize = markHeight * 0.55;
-  doc.image(qrLabelAssetPaths.appIcon, cx - iconSize / 2, topY, {
-    width: iconSize,
-    height: iconSize,
-  });
 }
 
 function drawWhiteQrPlate(
@@ -221,55 +211,66 @@ async function drawSquareLabel(
   fillSquareBackground(doc, x, y, width, height, colorHex);
 
   doc.save();
-  const clipR = Math.min(width, height) * 0.08;
+  const clipR = Math.min(width, height) * SQUARE_CORNER_RATIO;
   doc.roundedRect(x, y, width, height, clipR).clip();
 
-  // Left brand column (~42%), right QR column (~58%) — matches Square QR Design
-  const leftW = width * 0.42;
+  // Left brand (~46%), right QR (~54%) — matches Square QR Design mock
+  const leftW = width * 0.46;
   const rightX = x + leftW;
   const rightW = width - leftW;
+  const leftCx = x + leftW / 2;
 
-  const logoH = height * 0.55;
-  const logoTop = y + height * 0.08;
-  drawAccorMark(doc, x + leftW / 2, logoTop, logoH);
-
-  const taglineY = logoTop + logoH + 1;
-  drawText(doc, QR_LABEL_TAGLINE, x + 3, taglineY, leftW - 6, {
-    bold: true,
-    fontSize: 2.6,
-    color: TEXT_WHITE,
+  // Full lockup from rectnagle-img-logo.png (logo + ACCOR + tagline already in image)
+  const brandH = height * 0.82;
+  const brandW = leftW * 0.9;
+  const brandTop = y + (height - brandH) / 2;
+  doc.image(qrLabelAssetPaths.rectangleBrandLockup, leftCx - brandW / 2, brandTop, {
+    fit: [brandW, brandH],
+    align: 'center',
+    valign: 'center',
   });
 
+  // Batch + SKU side-by-side above QR
   const batchLabel = metadata.batchName || metadata.batchId;
   const skuLabel = metadata.productSku ?? 'N/A';
-  const metaY = y + height * 0.06;
-  drawText(doc, `${batchLabel}   ${skuLabel}`, rightX, metaY, rightW - 4, {
+  const metaY = y + height * 0.055;
+  const metaFont = 3.4;
+  const metaPad = 3;
+  const halfMetaW = (rightW - metaPad * 2) / 2;
+
+  drawText(doc, batchLabel, rightX + metaPad, metaY, halfMetaW, {
     bold: true,
-    fontSize: 3.2,
+    fontSize: metaFont,
     color: TEXT_WHITE,
-    align: 'center',
+    align: 'left',
+  });
+  drawText(doc, skuLabel, rightX + metaPad + halfMetaW, metaY, halfMetaW, {
+    bold: true,
+    fontSize: metaFont,
+    color: TEXT_WHITE,
+    align: 'right',
   });
 
-  const qrSize = Math.round(Math.min(rightW * 0.62, height * 0.52));
-  const qrPad = 1.8;
-  const qrX = rightX + (rightW - qrSize) / 2 - 1;
-  const qrY = metaY + 5;
+  const qrSize = Math.round(Math.min(rightW * 0.58, height * 0.5));
+  const qrPad = 2;
+  const qrX = rightX + (rightW - qrSize) / 2;
+  const qrY = metaY + metaFont + height * 0.035;
 
   drawWhiteQrPlate(doc, qrX, qrY, qrSize, qrPad);
   const qrBuffer = await createQrImageBuffer(code, qrSize);
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
-  const ctaY = qrY + qrSize + qrPad + 2;
-  drawText(doc, 'Scan To Redeem', rightX, ctaY, rightW - 4, {
+  const ctaY = qrY + qrSize + qrPad + height * 0.025;
+  drawText(doc, 'Scan To Redeem', rightX, ctaY, rightW, {
     bold: true,
-    fontSize: 3.4,
+    fontSize: 3.5,
     color: TEXT_WHITE,
     align: 'center',
   });
-  drawText(doc, 'T&C Applied*', rightX, ctaY + 4, rightW - 6, {
-    fontSize: 2.2,
+  drawText(doc, 'T&C Applied*', rightX, ctaY + 4.2, rightW, {
+    fontSize: 2.3,
     color: TEXT_WHITE,
-    align: 'right',
+    align: 'center',
   });
 
   doc.restore();

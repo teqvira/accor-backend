@@ -8,6 +8,7 @@ import { rewardsRoutes } from '../modules/rewards/index';
 import { transactionsRoutes } from '../modules/transactions/index';
 import { productsRoutes } from '../modules/products/index';
 import { usersRoutes } from '../modules/users/index';
+import { dashboardRoutes } from '../modules/dashboard/index';
 import { payoutWebhookRoutes, withdrawalRoutes } from '../modules/withdrawals/index';
 import { walletRoutes } from '../modules/wallet/index';
 
@@ -58,6 +59,7 @@ const uploadLimiter = rateLimit({
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/users', usersRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/products', productsRoutes);
   app.use('/api/qr', qrRoutes);
   app.use('/api/wallet', walletRoutes);

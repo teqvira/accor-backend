@@ -12,7 +12,9 @@ import {
   createUserSchema,
   forgotPasswordSchema,
   loginSchema,
+  logoutSchema,
   refreshTokenSchema,
+  registerDeviceTokenSchema,
   resendMobileOtpSchema,
   resetPasswordWithCurrentSchema,
   resetPasswordWithTokenSchema,
@@ -73,7 +75,15 @@ router.post(
 router.post(
   '/logout',
   requireBearerToken,
+  validate(logoutSchema),
   asyncHandler((req, res) => authController.logout(req, res))
+);
+
+router.post(
+  '/device-token',
+  authenticate,
+  validate(registerDeviceTokenSchema),
+  asyncHandler((req, res) => authController.registerDeviceToken(req, res))
 );
 
 router.post(

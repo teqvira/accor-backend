@@ -16,8 +16,12 @@ import {
 } from './repositories/otp-verification.repository';
 import { refreshTokenRepository } from './repositories/refresh-token.repository';
 import { userRepository } from './repositories/user.repository';
+import { userDeviceTokenRepository } from './repositories/user-device-token.repository';
+import { userSessionRepository } from './repositories/user-session.repository';
+import { invalidTokenRepository } from './repositories/invalid-token.repository';
 import { JwtAccessPayload } from './auth.types';
 import { IUser, UserRole } from './user.types';
+import type { DevicePlatform } from './repositories/user-device-token.repository';
 import { sendOtpEmail } from '../../infrastructure/email/email.client';
 import { sendOtpSms } from '../../infrastructure/sms/sms.client';
 import {
@@ -28,6 +32,16 @@ import {
   verifyResetToken,
 } from './jwt.util';
 import { generateOtp, hashOtp, verifyOtpHash } from './otp.util';
+
+export interface DeviceSessionContext {
+  deviceToken?: string;
+  platform?: DevicePlatform;
+  deviceId?: string;
+  deviceName?: string;
+  appVersion?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
 
 const ROLE_RANK: Record<UserRole, number> = {
   [UserRole.USER]: 1,
@@ -60,7 +74,7 @@ async function hashRefreshToken(token: string): Promise<string> {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-async function issueTokenPair(user: IUser) {
+async function issueTokenPair(user: IUser, ctx: DeviceSessionContext = {}) {
   const tokenId = uuidv4();
   const accessToken = signAccessToken({
     sub: user._id,
@@ -76,10 +90,32 @@ async function issueTokenPair(user: IUser) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  await refreshTokenRepository.create({
+  const tokenHash = await hashRefreshToken(refreshToken);
+  const stored = await refreshTokenRepository.create({
     userId: user._id,
-    tokenHash: await hashRefreshToken(refreshToken),
+    tokenHash,
     expiresAt,
+  });
+
+  let deviceTokenId: string | undefined;
+  if (ctx.deviceToken) {
+    const device = await userDeviceTokenRepository.upsert({
+      userId: user._id,
+      deviceToken: ctx.deviceToken,
+      platform: ctx.platform,
+      deviceId: ctx.deviceId,
+      deviceName: ctx.deviceName,
+      appVersion: ctx.appVersion,
+    });
+    deviceTokenId = device._id;
+  }
+
+  await userSessionRepository.create({
+    userId: user._id,
+    refreshTokenId: stored._id,
+    deviceTokenId,
+    ipAddress: ctx.ipAddress,
+    userAgent: ctx.userAgent,
   });
 
   return { accessToken, refreshToken };
@@ -188,7 +224,7 @@ export class AuthService {
     return sanitizeUser(user);
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, ctx: DeviceSessionContext = {}) {
     const user = await userRepository.findByEmail(email, { includePassword: true });
     if (!user) {
       throw new UnauthorizedError(
@@ -219,7 +255,7 @@ export class AuthService {
       );
     }
 
-    const tokens = await issueTokenPair(user);
+    const tokens = await issueTokenPair(user, ctx);
     return {
       user: sanitizeUser(user),
       ...tokens,
@@ -294,7 +330,8 @@ export class AuthService {
   async verifyMobileOtp(
     mobileNumber: string,
     otp: string,
-    loggedInUserId?: string
+    loggedInUserId?: string,
+    ctx: DeviceSessionContext = {}
   ) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
     const user = await userRepository.findByMobile(mobileNumber);
@@ -326,14 +363,14 @@ export class AuthService {
       );
     }
 
-    const tokens = await issueTokenPair(verifiedUser);
+    const tokens = await issueTokenPair(verifiedUser, ctx);
     return {
       user: sanitizeUser(verifiedUser),
       ...tokens,
     };
   }
 
-  async refreshToken(refreshToken: string) {
+  async refreshToken(refreshToken: string, ctx: DeviceSessionContext = {}) {
     let payload;
     try {
       payload = verifyRefreshToken(refreshToken);
@@ -361,6 +398,14 @@ export class AuthService {
     if (stored.revoked) {
       // Reuse of a blocked token — invalidate all sessions for safety
       await refreshTokenRepository.revokeManyByUserId(payload.sub);
+      await userSessionRepository.closeManyByUserId(payload.sub);
+      await invalidTokenRepository.recordInvalidAuthToken({
+        userId: payload.sub,
+        tokenHash,
+        tokenType: 'refresh',
+        reason: 'reuse_detected',
+        expiresAt: stored.expiresAt,
+      });
       throw new UnauthorizedError(
         'Your session has expired. Please log in again',
         `refreshToken: blocked/revoked token reused for userId=${payload.sub}`
@@ -392,8 +437,9 @@ export class AuthService {
 
     const next = await buildTokenPair(user);
 
+    let rotated;
     try {
-      await refreshTokenRepository.rotate({
+      rotated = await refreshTokenRepository.rotate({
         oldTokenId: stored._id,
         userId: user._id,
         newTokenHash: next.tokenHash,
@@ -414,20 +460,105 @@ export class AuthService {
       throw err;
     }
 
+    await invalidTokenRepository.recordInvalidAuthToken({
+      userId: payload.sub,
+      tokenHash,
+      tokenType: 'refresh',
+      reason: 'refresh_rotate',
+      expiresAt: stored.expiresAt,
+    });
+
+    await userSessionRepository.touchByRefreshTokenId(stored._id, rotated._id);
+
+    if (ctx.deviceToken) {
+      await userDeviceTokenRepository.upsert({
+        userId: user._id,
+        deviceToken: ctx.deviceToken,
+        platform: ctx.platform,
+        deviceId: ctx.deviceId,
+        deviceName: ctx.deviceName,
+        appVersion: ctx.appVersion,
+      });
+    }
+
     return {
       accessToken: next.accessToken,
       refreshToken: next.refreshToken,
     };
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, opts: { deviceToken?: string } = {}) {
     try {
       const payload = verifyRefreshToken(refreshToken);
       const tokenHash = await hashRefreshToken(refreshToken);
+      const stored = await refreshTokenRepository.findAnyByUserAndHash(
+        payload.sub,
+        tokenHash
+      );
+
       await refreshTokenRepository.deleteByUserAndHash(payload.sub, tokenHash);
+
+      const closedSession = stored
+        ? await userSessionRepository.closeByRefreshTokenId(stored._id)
+        : null;
+
+      await invalidTokenRepository.recordInvalidAuthToken({
+        userId: payload.sub,
+        tokenHash,
+        tokenType: 'refresh',
+        reason: 'logout',
+        sessionId: closedSession?._id,
+        expiresAt: stored?.expiresAt,
+      });
+
+      if (opts.deviceToken) {
+        const deactivated =
+          await userDeviceTokenRepository.deactivateByUserAndToken(
+            payload.sub,
+            opts.deviceToken
+          );
+        await invalidTokenRepository.recordInvalidDeviceToken({
+          userId: payload.sub,
+          deviceTokenId: deactivated?._id,
+          deviceToken: opts.deviceToken,
+          platform: deactivated?.platform,
+          reason: 'logout',
+          sessionId: closedSession?._id,
+        });
+      }
     } catch {
       // ignore invalid tokens on logout
     }
+  }
+
+  async registerDeviceToken(
+    userId: string,
+    data: {
+      deviceToken: string;
+      platform?: DevicePlatform;
+      deviceId?: string;
+      deviceName?: string;
+      appVersion?: string;
+    }
+  ) {
+    const device = await userDeviceTokenRepository.upsert({
+      userId,
+      deviceToken: data.deviceToken,
+      platform: data.platform,
+      deviceId: data.deviceId,
+      deviceName: data.deviceName,
+      appVersion: data.appVersion,
+    });
+
+    return {
+      id: device._id,
+      platform: device.platform,
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      appVersion: device.appVersion,
+      isActive: device.isActive,
+      updatedAt: device.updatedAt,
+    };
   }
 
   async forgotPassword(email: string) {
@@ -501,6 +632,17 @@ export class AuthService {
     const hashed = await bcrypt.hash(newPassword, 12);
     await userRepository.updatePassword(user._id, hashed);
     await refreshTokenRepository.deleteManyByUserId(user._id);
+    await userSessionRepository.closeManyByUserId(user._id);
+    const devices = await userDeviceTokenRepository.deactivateManyByUserId(user._id);
+    for (const device of devices) {
+      await invalidTokenRepository.recordInvalidDeviceToken({
+        userId: user._id,
+        deviceTokenId: device._id,
+        deviceToken: device.deviceToken,
+        platform: device.platform,
+        reason: 'revoked',
+      });
+    }
 
     return { message: 'Password reset successfully' };
   }
@@ -529,6 +671,17 @@ export class AuthService {
     const hashed = await bcrypt.hash(newPassword, 12);
     await userRepository.updatePassword(user._id, hashed);
     await refreshTokenRepository.deleteManyByUserId(user._id);
+    await userSessionRepository.closeManyByUserId(user._id);
+    const devices = await userDeviceTokenRepository.deactivateManyByUserId(user._id);
+    for (const device of devices) {
+      await invalidTokenRepository.recordInvalidDeviceToken({
+        userId: user._id,
+        deviceTokenId: device._id,
+        deviceToken: device.deviceToken,
+        platform: device.platform,
+        reason: 'revoked',
+      });
+    }
 
     return { message: 'Password updated successfully' };
   }
