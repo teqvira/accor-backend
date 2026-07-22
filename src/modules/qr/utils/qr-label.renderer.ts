@@ -13,8 +13,8 @@ import { qrLabelAssetPaths } from './qr-label.paths';
 const TEXT_WHITE = '#FFFFFF';
 const QR_DARK = '#000000';
 const QR_LIGHT = '#FFFFFF';
-/** Square (1.5"×1") corner radius — matches heavily rounded mock. */
-const SQUARE_CORNER_RATIO = 0.14;
+/** Square (1.5"×1") corner radius — reduced for sleeker, modern rounded corners. */
+const SQUARE_CORNER_RATIO = 0.07;
 
 export interface QrLabelMetadata {
   batchId: string;
@@ -123,40 +123,58 @@ async function drawCapLabel(
   doc.save();
   doc.circle(cx, cy, radius).clip();
 
-  // Proportions tuned to the 1" Cap design mock
-  const logoSize = size * 0.22;
-  const logoY = y + size * 0.04;
-  doc.image(qrLabelAssetPaths.appIcon, cx - logoSize / 2, logoY, {
-    width: logoSize,
-    height: logoSize,
-  });
-
-  const metaFont = 3.2;
-  const metaY = logoY + logoSize + size * 0.01;
-  const batchLabel = metadata.batchName || metadata.batchId;
-  const skuLabel = metadata.productSku ?? 'N/A';
-  drawText(doc, `${batchLabel}   ${skuLabel}`, x + 4, metaY, size - 8, {
-    bold: true,
-    fontSize: metaFont,
-    color: TEXT_WHITE,
+  // Full ACCOR brand lockup at the top of the cap
+  const brandW = size * 0.32;
+  const brandH = size * 0.20;
+  const brandY = y + size * 0.035;
+  doc.image(qrLabelAssetPaths.rectangleBrandLockup, cx - brandW / 2, brandY, {
+    fit: [brandW, brandH],
+    align: 'center',
+    valign: 'center',
   });
 
   const qrSize = Math.round(size * 0.38);
-  const qrPad = size * 0.025;
+  const qrPad = 1.5;
+  const plateW = qrSize + qrPad * 2;
+  const plateX = cx - plateW / 2;
   const qrX = cx - qrSize / 2;
-  const qrY = metaY + metaFont + size * 0.02;
+
+  // Batch + SKU side-by-side above QR
+  const batchLabel = metadata.batchName || metadata.batchId;
+  const skuLabel = metadata.productSku ?? 'N/A';
+  // Margin bottom below logo lockup
+  const metaY = brandY + brandH + size * 0.05;
+  const metaFont = 2.8;
+  const metaW = plateW / 2 + 5; // Extra width to prevent wrapping long SKU text (e.g. ACC-20W80)
+
+  drawText(doc, batchLabel, plateX - 2, metaY, metaW, {
+    bold: true,
+    fontSize: metaFont,
+    color: TEXT_WHITE,
+    align: 'left',
+  });
+  drawText(doc, skuLabel, plateX + plateW / 2 - 3, metaY, metaW, {
+    bold: true,
+    fontSize: metaFont,
+    color: TEXT_WHITE,
+    align: 'right',
+  });
+
+  // Vertical gap between header text and top of white QR plate
+  const qrY = metaY + metaFont + size * 0.045;
 
   drawWhiteQrPlate(doc, qrX, qrY, qrSize, qrPad);
   const qrBuffer = await createQrImageBuffer(code, qrSize);
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
-  const gutterW = (qrX - x) * 0.9;
-  const leftCx = x + (qrX - x) / 2;
-  const rightCx = qrX + qrSize + (x + size - qrX - qrSize) / 2;
-  const iconSize = size * 0.09;
-  const sideIconY = qrY + qrSize * 0.22;
-  const sideTextY = sideIconY + iconSize + 0.5;
-  const sideFont = 2.8;
+  // Side badges (100% Genuine on left, Trusted Quality on right)
+  const gutterW = plateX - x - 1;
+  const leftCx = x + (plateX - x) / 2;
+  const rightCx = (plateX + plateW) + (x + size - (plateX + plateW)) / 2;
+  const iconSize = size * 0.095;
+  const sideIconY = qrY + qrSize * 0.18;
+  const sideTextY = sideIconY + iconSize + 0.8;
+  const sideFont = 2.5;
 
   doc.image(
     qrLabelAssetPaths.shieldIcon,
@@ -184,15 +202,18 @@ async function drawCapLabel(
     lineGap: -0.5,
   });
 
-  const ctaY = qrY + qrSize + qrPad + size * 0.035;
-  drawText(doc, 'Scan To Redeem', x + 6, ctaY, size - 12, {
+  // Bottom CTA text with generous gap below QR plate matching Figma
+  const ctaY = qrY + qrSize + qrPad + size * 0.055;
+  drawText(doc, 'Scan To Redeem', x + 4, ctaY, size - 8, {
     bold: true,
-    fontSize: 3.6,
+    fontSize: 3.5,
     color: TEXT_WHITE,
+    align: 'center',
   });
-  drawText(doc, 'T&C Applied*', x + 6, ctaY + 4.2, size - 12, {
-    fontSize: 2.4,
+  drawText(doc, 'T&C Applied*', x + 4, ctaY + 4.2, size - 8, {
+    fontSize: 2.2,
     color: TEXT_WHITE,
+    align: 'center',
   });
 
   doc.restore();
@@ -221,8 +242,8 @@ async function drawSquareLabel(
   const leftCx = x + leftW / 2;
 
   // Full lockup from rectnagle-img-logo.png (logo + ACCOR + tagline already in image)
-  const brandH = height * 0.82;
-  const brandW = leftW * 0.9;
+  const brandH = height * 0.78;
+  const brandW = leftW * 0.72;
   const brandTop = y + (height - brandH) / 2;
   doc.image(qrLabelAssetPaths.rectangleBrandLockup, leftCx - brandW / 2, brandTop, {
     fit: [brandW, brandH],
@@ -230,45 +251,49 @@ async function drawSquareLabel(
     valign: 'center',
   });
 
-  // Batch + SKU side-by-side above QR
+  const qrSize = Math.round(Math.min(rightW * 0.58, height * 0.5));
+  const qrPad = 2;
+  const plateW = qrSize + qrPad * 2;
+  const plateX = rightX + (rightW - plateW) / 2;
+  const qrX = plateX + qrPad;
+
+  // Batch + SKU side-by-side above QR (aligned with QR plate left & right edges)
   const batchLabel = metadata.batchName || metadata.batchId;
   const skuLabel = metadata.productSku ?? 'N/A';
-  const metaY = y + height * 0.055;
+  const metaY = y + height * 0.06;
   const metaFont = 3.4;
-  const metaPad = 3;
-  const halfMetaW = (rightW - metaPad * 2) / 2;
+  const halfMetaW = plateW / 2;
 
-  drawText(doc, batchLabel, rightX + metaPad, metaY, halfMetaW, {
+  drawText(doc, batchLabel, plateX, metaY, halfMetaW, {
     bold: true,
     fontSize: metaFont,
     color: TEXT_WHITE,
     align: 'left',
   });
-  drawText(doc, skuLabel, rightX + metaPad + halfMetaW, metaY, halfMetaW, {
+  drawText(doc, skuLabel, plateX + halfMetaW, metaY, halfMetaW, {
     bold: true,
     fontSize: metaFont,
     color: TEXT_WHITE,
     align: 'right',
   });
 
-  const qrSize = Math.round(Math.min(rightW * 0.58, height * 0.5));
-  const qrPad = 2;
-  const qrX = rightX + (rightW - qrSize) / 2;
-  const qrY = metaY + metaFont + height * 0.035;
+  // Gap between text and top of QR plate
+  const qrY = metaY + metaFont + height * 0.08;
 
   drawWhiteQrPlate(doc, qrX, qrY, qrSize, qrPad);
   const qrBuffer = await createQrImageBuffer(code, qrSize);
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
-  const ctaY = qrY + qrSize + qrPad + height * 0.025;
+  // Gap between bottom of QR plate and CTA text
+  const ctaY = qrY + qrSize + qrPad + height * 0.05;
   drawText(doc, 'Scan To Redeem', rightX, ctaY, rightW, {
     bold: true,
-    fontSize: 3.5,
+    fontSize: 3.4,
     color: TEXT_WHITE,
     align: 'center',
   });
   drawText(doc, 'T&C Applied*', rightX, ctaY + 4.2, rightW, {
-    fontSize: 2.3,
+    fontSize: 2.2,
     color: TEXT_WHITE,
     align: 'center',
   });
