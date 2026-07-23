@@ -172,8 +172,9 @@ async function drawCapLabel(
   const leftCx = x + (plateX - x) / 2;
   const rightCx = (plateX + plateW) + (x + size - (plateX + plateW)) / 2;
   const iconSize = size * 0.095;
-  const sideIconY = qrY + qrSize * 0.18;
-  const sideTextY = sideIconY + iconSize + 0.8;
+  const sideIconY = qrY + qrSize * 0.12;
+  const iconTextGap = 2.5;
+  const sideTextY = sideIconY + iconSize + iconTextGap;
   const sideFont = 2.5;
 
   doc.image(
@@ -193,13 +194,13 @@ async function drawCapLabel(
     bold: true,
     fontSize: sideFont,
     color: TEXT_WHITE,
-    lineGap: -0.5,
+    lineGap: -0.1,
   });
   drawText(doc, 'TRUSTED\nQUALITY', rightCx - gutterW / 2, sideTextY, gutterW, {
     bold: true,
     fontSize: sideFont,
     color: TEXT_WHITE,
-    lineGap: -0.5,
+    lineGap: -0.1,
   });
 
   // Bottom CTA text with generous gap below QR plate matching Figma
