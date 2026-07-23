@@ -12,7 +12,10 @@ export type CouponDisplayStatus = 'active' | 'expired' | 'inactive' | 'draft';
 
 export interface IQrBatch {
   _id: string;
+  /** Human-readable code shown on labels, e.g. BATCH-001 (not the UUID). */
   name: string;
+  /** Optional marketing/coupon title — never used as batch label. */
+  couponName?: string;
   totalQrs: number;
   generatedCount: number;
   productId?: string;

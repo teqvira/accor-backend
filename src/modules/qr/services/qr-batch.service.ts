@@ -58,7 +58,7 @@ function toBatchListItem(batch: IQrBatch): QrBatchListItem {
   return {
     batchId: batch._id,
     batchName: batch.name,
-    couponName: batch.name,
+    couponName: batch.couponName ?? '',
     productName: batch.product?.name ?? '',
     productSku: batch.product?.skuCode ?? '',
     productImageUrl: batch.product?.imageUrl,
@@ -105,12 +105,13 @@ export class QrBatchService {
 
   async createBatch(input: CreateBatchInput) {
     await this.getActiveProductForBatch(input.productId);
-    const batchName =
-      input.couponName?.trim() || (await generateNextBatchLabel());
+    // Always auto-assign BATCH-001 style code for labels (UUID stays as batchId).
+    const batchName = await generateNextBatchLabel();
     const labelColor = input.color ?? DEFAULT_QR_LABEL_COLOR;
 
     const batch = await qrBatchRepository.create({
       name: batchName,
+      couponName: input.couponName?.trim(),
       totalQrs: input.totalQrs,
       productId: input.productId,
       walletAmount: input.couponValue,

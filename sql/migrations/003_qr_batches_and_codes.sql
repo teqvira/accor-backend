@@ -7,7 +7,10 @@ CREATE TABLE IF NOT EXISTS qr_batches (
 
   product_id UUID NOT NULL REFERENCES products (id),
 
+  -- Human-readable code for labels, e.g. BATCH-001 (UUID is still the PK)
   name VARCHAR(255) NOT NULL,
+  -- Optional marketing title — never printed as the batch code on QR labels
+  coupon_name VARCHAR(255),
 
   wallet_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   reward_points INTEGER NOT NULL DEFAULT 0,

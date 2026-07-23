@@ -10,6 +10,7 @@ import { IQrBatch, QrBatchStatus } from '../qr.types';
 interface QrBatchRow {
   id: string;
   name: string;
+  coupon_name: string | null;
   total_qrs: number;
   generated_count: number;
   product_id: string | null;
@@ -33,13 +34,13 @@ interface QrBatchRow {
 }
 
 const BATCH_COLUMNS = `
-  b.id, b.name, b.total_qrs, b.generated_count, b.product_id,
+  b.id, b.name, b.coupon_name, b.total_qrs, b.generated_count, b.product_id,
   b.wallet_amount, b.reward_points, b.start_date, b.end_date, b.active,
   b.status, b.label_shape, b.label_color, b.created_by, b.created_at, b.updated_at
 `;
 
 const BATCH_RETURNING = `
-  id, name, total_qrs, generated_count, product_id,
+  id, name, coupon_name, total_qrs, generated_count, product_id,
   wallet_amount, reward_points, start_date, end_date, active,
   status, label_shape, label_color, created_by, created_at, updated_at
 `;
@@ -48,6 +49,7 @@ export function mapQrBatchRow(row: QrBatchRow): IQrBatch {
   const batch: IQrBatch = {
     _id: row.id,
     name: row.name,
+    couponName: row.coupon_name ?? undefined,
     totalQrs: row.total_qrs,
     generatedCount: row.generated_count,
     productId: row.product_id ?? undefined,
@@ -87,6 +89,7 @@ export function mapQrBatchRow(row: QrBatchRow): IQrBatch {
 
 export interface CreateQrBatchData {
   name: string;
+  couponName?: string;
   totalQrs: number;
   productId: string;
   walletAmount: number;
@@ -105,13 +108,14 @@ export const qrBatchRepository = {
   create: async (data: CreateQrBatchData): Promise<IQrBatch> => {
     const result = await pool.query<QrBatchRow>(
       `INSERT INTO qr_batches
-         (name, total_qrs, generated_count, product_id,
+         (name, coupon_name, total_qrs, generated_count, product_id,
           wallet_amount, reward_points, start_date, end_date, active, status,
           label_shape, label_color, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING ${BATCH_RETURNING}`,
       [
         data.name,
+        data.couponName ?? null,
         data.totalQrs,
         data.generatedCount ?? 0,
         data.productId,
