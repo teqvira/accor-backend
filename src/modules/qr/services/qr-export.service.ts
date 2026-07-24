@@ -124,7 +124,8 @@ async function streamPngExport(
 export interface ExportBatchQrOptions {
   batchName: string;
   batchId: string;
-  productSku?: string;
+  // productSku?: string; // old: Product SKU on QR label
+  couponName?: string;
   shape?: QrLabelShape;
   color?: QrLabelColor;
   format: QrExportFormat;
@@ -138,7 +139,8 @@ export async function exportBatchQrCodes(
   const {
     batchName,
     batchId,
-    productSku,
+    // productSku,
+    couponName,
     shape = DEFAULT_QR_LABEL_SHAPE,
     color = DEFAULT_QR_LABEL_COLOR,
     format,
@@ -158,7 +160,8 @@ export async function exportBatchQrCodes(
   const labelMetadata: QrLabelMetadata = {
     batchId,
     batchName,
-    productSku,
+    // productSku,
+    couponName,
     shape,
     color,
   };

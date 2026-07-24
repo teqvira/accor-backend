@@ -68,7 +68,8 @@ export class QrController {
     await exportBatchQrCodes(res, {
       batchName: batch.batchName,
       batchId,
-      productSku: batch.productSku,
+      // productSku: batch.productSku, // old: Product SKU on QR label
+      couponName: batch.couponName,
       shape: batch.shape,
       color: batch.color,
       format,

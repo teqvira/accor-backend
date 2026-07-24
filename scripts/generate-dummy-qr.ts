@@ -15,7 +15,8 @@ const DUMMY_CODE = 'Ab12Cd34Ef56';
 const metadata = {
   batchId: '00000000-0000-0000-0000-000000000001',
   batchName: 'BATCH-001',
-  productSku: 'SKU-ENG-001',
+  // productSku: 'SKU-ENG-001', // old: Product SKU on QR label
+  couponName: 'Launch Offer',
 };
 
 async function render(shape: QrLabelShape, outPath: string): Promise<void> {
@@ -36,7 +37,7 @@ async function render(shape: QrLabelShape, outPath: string): Promise<void> {
       .fontSize(9)
       .fillColor('#111')
       .text(
-        `Dummy coupon — shape=${shape} | batch=${metadata.batchName} | sku=${metadata.productSku} | code=${DUMMY_CODE}`,
+        `Dummy coupon — shape=${shape} | batch=${metadata.batchName} | coupon=${metadata.couponName} | code=${DUMMY_CODE}`,
         margin,
         8,
         { width: pageW - margin * 2, align: 'center' }
@@ -65,7 +66,7 @@ async function main(): Promise<void> {
   console.log('Generated dummy coupons:');
   console.log(' -', capPath);
   console.log(' -', squarePath);
-  console.log('Label shows: BATCH-001 + SKU-ENG-001');
+  console.log('Label shows: BATCH-001 + Launch Offer (coupon name)');
   console.log('QR encodes: REDEMPTION_BASE_URL/redeem/' + DUMMY_CODE);
 }
 

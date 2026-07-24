@@ -19,7 +19,8 @@ const SQUARE_CORNER_RATIO = 0.07;
 export interface QrLabelMetadata {
   batchId: string;
   batchName: string;
-  productSku?: string;
+  // productSku?: string; // old: Product SKU on QR label
+  couponName?: string;
   shape?: QrLabelShape;
   color?: QrLabelColor;
 }
@@ -143,9 +144,10 @@ async function drawCapLabel(
   const plateX = cx - plateW / 2;
   const qrX = cx - qrSize / 2;
 
-  // Batch + SKU side-by-side above QR (aligned flush with QR plate left & right edges)
+  // Batch + coupon name side-by-side above QR (aligned flush with QR plate left & right edges)
   const batchLabel = metadata.batchName || metadata.batchId;
-  const skuLabel = metadata.productSku ?? 'N/A';
+  // const skuLabel = metadata.productSku ?? 'N/A'; // old: Product SKU
+  const couponLabel = metadata.couponName?.trim() || 'N/A';
   
   const metaY = brandY + brandH + size * 0.025;
   const metaFont = 2.5;
@@ -158,8 +160,14 @@ async function drawCapLabel(
     color: TEXT_WHITE,
     align: 'left',
   });
-  // SKU right-aligned flush with QR plate right edge
-  drawText(doc, skuLabel, plateX + plateW - textW, metaY, textW, {
+  // Coupon name right-aligned flush with QR plate right edge (same slot as old SKU)
+  // drawText(doc, skuLabel, plateX + plateW - textW, metaY, textW, {
+  //   bold: true,
+  //   fontSize: metaFont,
+  //   color: TEXT_WHITE,
+  //   align: 'right',
+  // });
+  drawText(doc, couponLabel, plateX + plateW - textW, metaY, textW, {
     bold: true,
     fontSize: metaFont,
     color: TEXT_WHITE,
@@ -264,10 +272,11 @@ async function drawSquareLabel(
   const plateX = rightX + (rightW - plateW) / 2;
   const qrX = plateX + qrPad;
 
-  // Clean Batch & SKU labels matching mockup
+  // Clean Batch & coupon name labels matching mockup
   const batchLabel = metadata.batchName || metadata.batchId;
-  const rawSku = metadata.productSku ?? 'N/A';
-  const skuLabel = rawSku.replace(/^ACC-/i, '');
+  // const rawSku = metadata.productSku ?? 'N/A'; // old: Product SKU
+  // const skuLabel = rawSku.replace(/^ACC-/i, '');
+  const couponLabel = metadata.couponName?.trim() || 'N/A';
 
   const metaFont = 3.4;
   const ctaFont = 3.4;
@@ -302,8 +311,14 @@ async function drawSquareLabel(
     color: TEXT_WHITE,
     align: 'left',
   });
-  // SKU right-aligned with QR plate
-  drawText(doc, skuLabel, plateX + plateW - textWidth, metaY, textWidth, {
+  // Coupon name right-aligned with QR plate (same slot as old SKU)
+  // drawText(doc, skuLabel, plateX + plateW - textWidth, metaY, textWidth, {
+  //   bold: true,
+  //   fontSize: metaFont,
+  //   color: TEXT_WHITE,
+  //   align: 'right',
+  // });
+  drawText(doc, couponLabel, plateX + plateW - textWidth, metaY, textWidth, {
     bold: true,
     fontSize: metaFont,
     color: TEXT_WHITE,
