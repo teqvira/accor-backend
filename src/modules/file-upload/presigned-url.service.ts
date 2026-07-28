@@ -48,6 +48,7 @@ export class PresignedUrlService {
 
     const uploadUrl = await getSignedUrl(s3Client, command, {
       expiresIn: PRESIGNED_URL_EXPIRES_SECONDS,
+      signableHeaders: new Set(['content-type']),
     });
 
     return {
@@ -88,6 +89,8 @@ export class PresignedUrlService {
 
     const uploadUrl = await getSignedUrl(s3Client, command, {
       expiresIn: PRESIGNED_URL_EXPIRES_SECONDS,
+      // Keep Content-Type in the signature so Flutter must send the same header.
+      signableHeaders: new Set(['content-type']),
     });
 
     const fileUrl = buildS3ObjectUrl(key);
