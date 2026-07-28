@@ -12,32 +12,25 @@ type Queryable = Pick<PoolClient, 'query'>;
 
 const USER_PUBLIC_COLUMNS = `
   id, name, email, mobile_number, wallet_balance, reward_points,
-  role, is_active, is_verified, created_at, updated_at
+  role, is_active, is_verified,
+  avatar_url, date_of_birth, city, state, user_type, profile_completed,
+  created_at, updated_at
 `;
 
 const USER_COLUMNS_WITH_PASSWORD = `
   id, name, email, mobile_number, password_hash, wallet_balance, reward_points,
-  role, is_active, is_verified, created_at, updated_at
+  role, is_active, is_verified,
+  avatar_url, date_of_birth, city, state, user_type, profile_completed,
+  created_at, updated_at
 `;
 
-function mapOptionalRow(row: UserRow | undefined): IUser | null {
+function mapOptionalRow(row: Parameters<typeof mapUserRow>[0] | undefined): IUser | null {
   return row ? mapUserRow(row) : null;
 }
 
-interface UserRow {
-  id: string;
-  name: string | null;
-  email: string | null;
-  mobile_number: string | null;
+type UserRow = Parameters<typeof mapUserRow>[0] & {
   password_hash?: string | null;
-  wallet_balance: string | number;
-  reward_points: number;
-  role: UserRole;
-  is_active: boolean;
-  is_verified: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
+};
 
 export const userRepository = {
   findById: async (
@@ -136,6 +129,30 @@ export const userRepository = {
     if (data.isVerified !== undefined) {
       sets.push(`is_verified = $${paramIndex++}`);
       values.push(data.isVerified);
+    }
+    if (data.avatarUrl !== undefined) {
+      sets.push(`avatar_url = $${paramIndex++}`);
+      values.push(data.avatarUrl);
+    }
+    if (data.dateOfBirth !== undefined) {
+      sets.push(`date_of_birth = $${paramIndex++}`);
+      values.push(data.dateOfBirth);
+    }
+    if (data.city !== undefined) {
+      sets.push(`city = $${paramIndex++}`);
+      values.push(data.city);
+    }
+    if (data.state !== undefined) {
+      sets.push(`state = $${paramIndex++}`);
+      values.push(data.state);
+    }
+    if (data.userType !== undefined) {
+      sets.push(`user_type = $${paramIndex++}`);
+      values.push(data.userType);
+    }
+    if (data.profileCompleted !== undefined) {
+      sets.push(`profile_completed = $${paramIndex++}`);
+      values.push(data.profileCompleted);
     }
 
     if (sets.length === 0) {

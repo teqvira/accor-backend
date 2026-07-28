@@ -1,4 +1,4 @@
-import { UserRole } from '../auth/user.types';
+import { UserRole, UserType } from '../auth/user.types';
 
 export interface UserListFilters {
   role?: UserRole;
@@ -14,4 +14,16 @@ export interface UpdateUserInput {
   role?: UserRole;
   isActive?: boolean;
   isVerified?: boolean;
+}
+
+export interface CompleteProfileInput {
+  name: string;
+  email: string;
+  dateOfBirth: string;
+  city: string;
+  state: string;
+  userType: UserType;
+  avatarUrl?: string;
+  aadhaarUrl: string;
+  panUrl: string;
 }

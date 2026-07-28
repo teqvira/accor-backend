@@ -44,3 +44,18 @@ export const updateUserSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field is required',
   });
+
+export const completeProfileSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  email: z.string().trim().email(),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD'),
+  city: z.string().trim().min(2).max(100),
+  state: z.string().trim().min(2).max(100),
+  userType: z.enum(['mechanic', 'dealer']),
+  avatarUrl: z.string().trim().url().optional(),
+  aadhaarUrl: z.string().trim().url(),
+  panUrl: z.string().trim().url(),
+});

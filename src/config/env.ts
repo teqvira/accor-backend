@@ -21,6 +21,12 @@ const envSchema = z.object({
   OTP_EXPIRES_MINUTES: z.coerce.number().default(10),
   OTP_LENGTH: z.coerce.number().min(4).max(8).default(6),
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().default(60),
+  /** Optional fixed phone for QA — always uses TEST_STATIC_OTP when set together. */
+  TEST_MOBILE_NUMBER: z
+    .string()
+    .regex(/^[6-9]\d{9}$/)
+    .optional(),
+  TEST_STATIC_OTP: z.string().min(4).max(8).optional(),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),

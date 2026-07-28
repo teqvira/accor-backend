@@ -5,6 +5,7 @@ import { UserRole } from '../auth/index';
 import { AuthRequest } from '../auth/auth.types';
 import { usersController } from './users.controller';
 import {
+  completeProfileSchema,
   listUsersQuerySchema,
   updateUserSchema,
 } from './users.validator';
@@ -16,11 +17,26 @@ const adminOnly = [
   requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN),
 ];
 
+const userOnly = [authenticate, requireRoles(UserRole.USER)];
+
 const asyncHandler =
   (fn: (req: AuthRequest, res: Response) => Promise<void>) =>
   (req: AuthRequest, res: Response, next: (err?: unknown) => void) => {
     Promise.resolve(fn(req, res)).catch(next);
   };
+
+router.get(
+  '/me',
+  ...userOnly,
+  asyncHandler((req, res) => usersController.getMe(req, res))
+);
+
+router.patch(
+  '/me',
+  ...userOnly,
+  validate(completeProfileSchema),
+  asyncHandler((req, res) => usersController.completeProfile(req, res))
+);
 
 router.get(
   '/',

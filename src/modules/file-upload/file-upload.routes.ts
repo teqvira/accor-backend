@@ -5,19 +5,34 @@ import { asyncHandler } from '../../shared/middleware/async-handler';
 import { authenticate, requireRoles } from '../auth/auth.middleware';
 import { UserRole } from '../auth/index';
 import { sendError } from '../../shared/utils/response';
-import { createPresignedUploadUrl, uploadImage } from './file-upload.controller';
+import {
+  createPresignedUploadUrl,
+  createProfilePresignedUploadUrl,
+  uploadImage,
+} from './file-upload.controller';
 import upload from './upload.middleware';
-import { presignedUploadSchema } from './file-upload.validator';
+import {
+  presignedUploadSchema,
+  profilePresignedUploadSchema,
+} from './file-upload.validator';
 
 const router = Router();
 
 const adminOnly = [authenticate, requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN)];
+const userOnly = [authenticate, requireRoles(UserRole.USER)];
 
 router.post(
   '/presigned-url',
   ...adminOnly,
   validate(presignedUploadSchema),
   asyncHandler(createPresignedUploadUrl)
+);
+
+router.post(
+  '/profile-presigned-url',
+  ...userOnly,
+  validate(profilePresignedUploadSchema),
+  asyncHandler(createProfilePresignedUploadUrl)
 );
 
 router.post(

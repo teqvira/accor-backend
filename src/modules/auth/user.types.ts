@@ -4,6 +4,8 @@ export enum UserRole {
   USER = 'user',
 }
 
+export type UserType = 'mechanic' | 'dealer';
+
 export interface IUser {
   _id: string;
   name?: string;
@@ -15,6 +17,12 @@ export interface IUser {
   role: UserRole;
   isActive: boolean;
   isVerified: boolean;
+  avatarUrl?: string;
+  dateOfBirth?: Date;
+  city?: string;
+  state?: string;
+  userType?: UserType;
+  profileCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +38,12 @@ interface UserRow {
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
+  avatar_url?: string | null;
+  date_of_birth?: Date | string | null;
+  city?: string | null;
+  state?: string | null;
+  user_type?: string | null;
+  profile_completed?: boolean | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -46,6 +60,12 @@ export function mapUserRow(row: UserRow): IUser {
     role: row.role,
     isActive: row.is_active,
     isVerified: row.is_verified,
+    avatarUrl: row.avatar_url ?? undefined,
+    dateOfBirth: row.date_of_birth ? new Date(row.date_of_birth) : undefined,
+    city: row.city ?? undefined,
+    state: row.state ?? undefined,
+    userType: (row.user_type as UserType | null) ?? undefined,
+    profileCompleted: Boolean(row.profile_completed),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -68,4 +88,10 @@ export interface UpdateUserData {
   role?: UserRole;
   isActive?: boolean;
   isVerified?: boolean;
+  avatarUrl?: string | null;
+  dateOfBirth?: string | null;
+  city?: string | null;
+  state?: string | null;
+  userType?: UserType | null;
+  profileCompleted?: boolean;
 }

@@ -33,6 +33,21 @@ import {
 } from './jwt.util';
 import { generateOtp, hashOtp, verifyOtpHash } from './otp.util';
 
+function isStaticTestMobile(mobileNumber: string): boolean {
+  return Boolean(
+    env.TEST_MOBILE_NUMBER &&
+      env.TEST_STATIC_OTP &&
+      env.TEST_MOBILE_NUMBER === mobileNumber
+  );
+}
+
+function resolveLoginOtp(mobileNumber: string): string {
+  if (isStaticTestMobile(mobileNumber) && env.TEST_STATIC_OTP) {
+    return env.TEST_STATIC_OTP;
+  }
+  return generateOtp();
+}
+
 export interface DeviceSessionContext {
   deviceToken?: string;
   platform?: DevicePlatform;
@@ -66,6 +81,14 @@ function sanitizeUser(user: IUser) {
     isVerified: user.isVerified,
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
+    avatarUrl: user.avatarUrl,
+    dateOfBirth: user.dateOfBirth
+      ? user.dateOfBirth.toISOString().slice(0, 10)
+      : undefined,
+    city: user.city,
+    state: user.state,
+    userType: user.userType,
+    profileCompleted: user.profileCompleted,
     createdAt: user.createdAt,
   };
 }
@@ -173,6 +196,10 @@ async function assertOtpResendAllowed(filters: {
   email?: string;
   purpose: OtpPurpose;
 }): Promise<void> {
+  if (filters.mobileNumber && isStaticTestMobile(filters.mobileNumber)) {
+    return;
+  }
+
   const latest = await otpVerificationRepository.findLatest(filters);
   if (!latest) return;
 
@@ -316,9 +343,16 @@ export class AuthService {
 
     await assertOtpResendAllowed({ mobileNumber, purpose: 'login' });
 
-    const otp = generateOtp();
+    const otp = resolveLoginOtp(mobileNumber);
     await issueOtp({ mobileNumber, purpose: 'login', otp });
-    await sendOtpSms(mobileNumber, otp);
+
+    if (isStaticTestMobile(mobileNumber)) {
+      console.log(
+        `[TEST OTP] static OTP for ${mobileNumber}: ${otp} (SMS skipped)`
+      );
+    } else {
+      await sendOtpSms(mobileNumber, otp);
+    }
 
     return { message: 'OTP sent successfully' };
   }
@@ -340,21 +374,28 @@ export class AuthService {
       purpose: 'login',
     });
 
-    if (!user || !otpRecord) {
+    const staticOtpOk =
+      isStaticTestMobile(mobileNumber) && otp === env.TEST_STATIC_OTP;
+
+    if (!user || (!otpRecord && !staticOtpOk)) {
       throw new BadRequestError(
         'No OTP request found. Please request a new OTP',
         `verifyMobileOtp: missing otp for mobile=${mobileNumber}`
       );
     }
 
-    if (!verifyOtpHash(otp, otpRecord.otpHash)) {
-      throw new BadRequestError(
-        'The OTP you entered is incorrect',
-        `verifyMobileOtp: OTP mismatch for userId=${user._id}`
-      );
+    if (!staticOtpOk) {
+      if (!otpRecord || !verifyOtpHash(otp, otpRecord.otpHash)) {
+        throw new BadRequestError(
+          'The OTP you entered is incorrect',
+          `verifyMobileOtp: OTP mismatch for userId=${user._id}`
+        );
+      }
     }
 
-    await otpVerificationRepository.markVerified(otpRecord._id);
+    if (otpRecord) {
+      await otpVerificationRepository.markVerified(otpRecord._id);
+    }
     const verifiedUser = await userRepository.markVerified(user._id);
     if (!verifiedUser) {
       throw new BadRequestError(
