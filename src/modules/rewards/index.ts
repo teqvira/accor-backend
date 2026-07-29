@@ -1,5 +1,14 @@
-export { default as rewardsRoutes } from './rewards.routes';
+export { default as rewardsUserRoutes } from './rewards.user.routes';
+export { default as rewardsAdminRoutes } from './rewards.admin.routes';
 export { rewardsService } from './rewards.service';
 export { rewardTransactionRepository } from './reward-transaction.repository';
+export { rewardCatalogRepository } from './reward-catalog.repository';
+export { rewardRedemptionRepository } from './reward-redemption.repository';
 export { RewardTransactionType } from './rewards.types';
-export type { IRewardTransaction } from './rewards.types';
+export type {
+  IRewardTransaction,
+  IRewardCatalogItem,
+  IRewardRedemption,
+  RewardCategory,
+  RewardStatus,
+} from './rewards.types';

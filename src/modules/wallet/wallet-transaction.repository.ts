@@ -129,4 +129,38 @@ export const walletTransactionRepository = {
     );
     return Number(result.rows[0]?.total ?? 0);
   },
+
+  sumTotalEarnedByUserId: async (userId: string): Promise<number> => {
+    const result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM wallet_transactions
+       WHERE user_id = $1
+         AND type = $2
+         AND reference_type IS DISTINCT FROM 'withdrawal'`,
+      [userId, WalletTransactionType.CREDIT]
+    );
+    return Number(result.rows[0]?.total ?? 0);
+  },
+
+  sumTotalWithdrawnByUserId: async (userId: string): Promise<number> => {
+    const result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM withdrawals
+       WHERE user_id = $1
+         AND status = 'success'`,
+      [userId]
+    );
+    return Number(result.rows[0]?.total ?? 0);
+  },
+
+  sumPendingAmountByUserId: async (userId: string): Promise<number> => {
+    const result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM withdrawals
+       WHERE user_id = $1
+         AND status IN ('pending', 'processing')`,
+      [userId]
+    );
+    return Number(result.rows[0]?.total ?? 0);
+  },
 };

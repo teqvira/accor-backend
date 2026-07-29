@@ -1,15 +1,14 @@
-import { Response, Router } from 'express';
+import { Router } from 'express';
+import { asyncHandler } from '../../shared/middleware/async-handler';
 import { validate } from '../../shared/middleware/validate';
 import { authController } from './auth.controller';
 import {
-  authenticate,
   optionalAuthenticate,
   requireBearerToken,
-  requireRoles,
+  authenticate,
 } from './auth.middleware';
-import { UserRole } from './user.types';
+import { AuthRequest } from './auth.types';
 import {
-  createUserSchema,
   forgotPasswordSchema,
   loginSchema,
   logoutSchema,
@@ -25,90 +24,90 @@ import {
 
 const router = Router();
 
-const asyncHandler =
-  (fn: (req: Parameters<typeof authController.login>[0], res: Response) => Promise<void>) =>
-  (req: Parameters<typeof authController.login>[0], res: Response, next: (err?: unknown) => void) => {
-    Promise.resolve(fn(req, res)).catch(next);
-  };
-
-router.post(
-  '/users',
-  authenticate,
-  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN),
-  validate(createUserSchema),
-  asyncHandler((req, res) => authController.createUser(req, res))
-);
-
 router.post(
   '/login',
   validate(loginSchema),
-  asyncHandler((req, res) => authController.login(req, res))
+  asyncHandler<AuthRequest>((req, res) => authController.login(req, res))
 );
 
 router.post(
   '/send-mobile-otp',
   optionalAuthenticate,
   validate(sendMobileOtpSchema),
-  asyncHandler((req, res) => authController.sendMobileOtp(req, res))
+  asyncHandler<AuthRequest>((req, res) => authController.sendMobileOtp(req, res))
 );
 
 router.post(
   '/resend-mobile-otp',
   optionalAuthenticate,
   validate(resendMobileOtpSchema),
-  asyncHandler((req, res) => authController.resendMobileOtp(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.resendMobileOtp(req, res)
+  )
 );
 
 router.post(
   '/verify-mobile-otp',
   optionalAuthenticate,
   validate(verifyMobileOtpSchema),
-  asyncHandler((req, res) => authController.verifyMobileOtp(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.verifyMobileOtp(req, res)
+  )
 );
 
 router.post(
   '/refresh-token',
   validate(refreshTokenSchema),
-  asyncHandler((req, res) => authController.refreshToken(req, res))
+  asyncHandler<AuthRequest>((req, res) => authController.refreshToken(req, res))
 );
 
 router.post(
   '/logout',
   requireBearerToken,
   validate(logoutSchema),
-  asyncHandler((req, res) => authController.logout(req, res))
+  asyncHandler<AuthRequest>((req, res) => authController.logout(req, res))
 );
 
 router.post(
   '/device-token',
   authenticate,
   validate(registerDeviceTokenSchema),
-  asyncHandler((req, res) => authController.registerDeviceToken(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.registerDeviceToken(req, res)
+  )
 );
 
 router.post(
   '/forgot-password',
   validate(forgotPasswordSchema),
-  asyncHandler((req, res) => authController.forgotPassword(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.forgotPassword(req, res)
+  )
 );
 
 router.post(
   '/verify-otp',
   validate(verifyPasswordOtpSchema),
-  asyncHandler((req, res) => authController.verifyPasswordOtp(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.verifyPasswordOtp(req, res)
+  )
 );
 
 router.post(
   '/reset-password/otp',
   validate(resetPasswordWithTokenSchema),
-  asyncHandler((req, res) => authController.resetPasswordWithToken(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.resetPasswordWithToken(req, res)
+  )
 );
 
 router.post(
   '/reset-password',
   authenticate,
   validate(resetPasswordWithCurrentSchema),
-  asyncHandler((req, res) => authController.resetPasswordWithCurrent(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    authController.resetPasswordWithCurrent(req, res)
+  )
 );
 
 export default router;

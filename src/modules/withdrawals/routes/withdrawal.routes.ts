@@ -1,8 +1,9 @@
-import { Response, Router } from 'express';
+import { Router } from 'express';
+import { asyncHandler } from '../../../shared/middleware/async-handler';
+import { withdrawLimiter } from '../../../shared/middleware/rate-limiters';
 import { validate } from '../../../shared/middleware/validate';
-import { authenticate, requireRoles } from '../../auth/auth.middleware';
-import { UserRole } from '../../auth/index';
 import { AuthRequest } from '../../auth/auth.types';
+import { userOnly } from '../../auth/guards';
 import { withdrawalController } from '../controllers/withdrawal.controller';
 import {
   createWithdrawalSchema,
@@ -11,38 +12,42 @@ import {
 
 const router = Router();
 
-const userOnly = [authenticate, requireRoles(UserRole.USER)];
-
-const asyncHandler =
-  (fn: (req: AuthRequest, res: Response) => Promise<void>) =>
-  (req: AuthRequest, res: Response, next: (err?: unknown) => void) => {
-    Promise.resolve(fn(req, res)).catch(next);
-  };
-
 router.post(
   '/payout-profile',
+  withdrawLimiter,
   ...userOnly,
   validate(savePayoutProfileSchema),
-  asyncHandler((req, res) => withdrawalController.savePayoutProfile(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.savePayoutProfile(req, res)
+  )
 );
 
 router.get(
   '/payout-profile',
+  withdrawLimiter,
   ...userOnly,
-  asyncHandler((req, res) => withdrawalController.getPayoutProfile(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.getPayoutProfile(req, res)
+  )
 );
 
 router.post(
   '/withdraw',
+  withdrawLimiter,
   ...userOnly,
   validate(createWithdrawalSchema),
-  asyncHandler((req, res) => withdrawalController.withdraw(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.withdraw(req, res)
+  )
 );
 
 router.get(
   '/withdrawals',
+  withdrawLimiter,
   ...userOnly,
-  asyncHandler((req, res) => withdrawalController.listWithdrawals(req, res))
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.listWithdrawals(req, res)
+  )
 );
 
 export default router;

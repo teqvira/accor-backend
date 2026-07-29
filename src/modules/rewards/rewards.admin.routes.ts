@@ -2,23 +2,15 @@ import { Router } from 'express';
 import { asyncHandler } from '../../shared/middleware/async-handler';
 import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
-import { transactionsController } from './transactions.controller';
+import { rewardsAdminController } from './rewards.admin.controller';
 
 const router = Router();
 
 router.get(
-  '/redemptions',
+  '/users/:userId',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
-    transactionsController.listRedemptions(req, res)
-  )
-);
-
-router.get(
-  '/activity',
-  ...adminOnly,
-  asyncHandler<AuthRequest>((req, res) =>
-    transactionsController.getActivity(req, res)
+    rewardsAdminController.getUserRewards(req, res)
   )
 );
 

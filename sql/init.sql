@@ -8,3 +8,7 @@
 \i sql/migrations/008_product_description_color.sql
 \i sql/migrations/009_refresh_token_revoked_at.sql
 \i sql/migrations/010_device_tokens_and_sessions.sql
+\i sql/migrations/011_qr_batch_coupon_name.sql
+\i sql/migrations/012_user_profile_fields.sql
+\i sql/migrations/013_reward_store.sql
+\i sql/migrations/014_activity_feed_indexes.sql

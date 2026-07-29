@@ -21,7 +21,7 @@ function parseBooleanQuery(value: unknown): boolean | undefined {
   return undefined;
 }
 
-export class UsersController {
+export class UsersAdminController {
   async list(req: AuthRequest, res: Response): Promise<void> {
     const page = getQueryNumber(req.query.page, 1);
     const limit = getQueryNumber(req.query.limit, 20);
@@ -32,16 +32,6 @@ export class UsersController {
       search: getOptionalQueryParam(req.query.search),
     });
     sendSuccess(res, 'Users fetched successfully', result);
-  }
-
-  async getMe(req: AuthRequest, res: Response): Promise<void> {
-    const result = await usersService.getMe(req.user!.sub);
-    sendSuccess(res, 'Profile fetched successfully', result);
-  }
-
-  async completeProfile(req: AuthRequest, res: Response): Promise<void> {
-    const result = await usersService.completeProfile(req.user!.sub, req.body);
-    sendSuccess(res, 'Profile saved successfully', result);
   }
 
   async getById(req: AuthRequest, res: Response): Promise<void> {
@@ -62,4 +52,4 @@ export class UsersController {
   }
 }
 
-export const usersController = new UsersController();
+export const usersAdminController = new UsersAdminController();

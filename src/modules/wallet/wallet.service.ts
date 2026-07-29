@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg';
 import { BadRequestError, NotFoundError } from '../../shared/utils/errors';
+import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
 import { walletTransactionRepository } from './wallet-transaction.repository';
 import {
@@ -117,6 +118,34 @@ export class WalletService {
       mobileNumber: user.mobileNumber,
       name: user.name,
       walletBalance: user.walletBalance,
+    };
+  }
+
+  async getSummary(userId: string, recentLimit = 10) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError('User not found', `getSummary: userId=${userId}`);
+    }
+
+    const [totalEarned, totalWithdrawn, pendingAmount, recentActivity] =
+      await Promise.all([
+        walletTransactionRepository.sumTotalEarnedByUserId(userId),
+        walletTransactionRepository.sumTotalWithdrawnByUserId(userId),
+        walletTransactionRepository.sumPendingAmountByUserId(userId),
+        activityService.getFeed({
+          userId,
+          page: 1,
+          limit: recentLimit,
+          scope: 'wallet',
+        }),
+      ]);
+
+    return {
+      balance: user.walletBalance,
+      totalEarned,
+      totalWithdrawn,
+      pendingAmount,
+      recentActivity,
     };
   }
 }

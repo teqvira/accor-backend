@@ -1,3 +1,50 @@
+// ---- Reward Catalog ----
+
+export type RewardCategory = 'electronics' | 'vouchers' | 'merchandise' | 'other';
+export type RewardStatus = 'active' | 'inactive';
+
+export interface IRewardCatalogItem {
+  _id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: RewardCategory;
+  pointsCost: number;
+  imageUrl: string | null;
+  stockQuantity: number | null;
+  status: RewardStatus;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IRewardRedemption {
+  _id: string;
+  userId: string;
+  rewardId: string;
+  idempotencyKey: string;
+  rewardCode: string;
+  rewardName: string;
+  rewardImageUrl: string | null;
+  pointsSpent: number;
+  pointsBalanceAfter: number;
+  redeemedAt: Date;
+  createdAt: Date;
+}
+
+export interface CreateRewardRedemptionData {
+  userId: string;
+  rewardId: string;
+  idempotencyKey: string;
+  rewardCode: string;
+  rewardName: string;
+  rewardImageUrl: string | null;
+  pointsSpent: number;
+  pointsBalanceAfter: number;
+}
+
+// ---- Reward Transactions ----
+
 export enum RewardTransactionType {
   CREDIT = 'credit',
   DEBIT = 'debit',

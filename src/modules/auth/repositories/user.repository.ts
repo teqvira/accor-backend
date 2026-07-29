@@ -262,6 +262,18 @@ export const userRepository = {
     return Number(result.rows[0]?.count ?? 0);
   },
 
+  /** Lock user row FOR UPDATE inside an existing transaction. */
+  findByIdForUpdate: async (
+    id: string,
+    client: Queryable
+  ): Promise<IUser | null> => {
+    const result = await client.query<UserRow>(
+      `SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    return mapOptionalRow(result.rows[0]);
+  },
+
   updateWalletAndPoints: async (
     id: string,
     walletDelta: number,

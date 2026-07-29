@@ -1,0 +1,5 @@
+export const REWARD_STORE_MILESTONES = [0, 10000, 50000, 75000, 100000] as const;
+
+export const REWARD_STORE_DEFAULT_PAGE = 1;
+export const REWARD_STORE_DEFAULT_LIMIT = 20;
+export const REWARD_STORE_MAX_LIMIT = 100;
