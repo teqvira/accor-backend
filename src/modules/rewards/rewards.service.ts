@@ -383,6 +383,16 @@ export class RewardsService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  async deleteReward(rewardId: string): Promise<void> {
+    const deleted = await rewardCatalogRepository.deleteById(rewardId);
+    if (!deleted) {
+      throw new NotFoundError(
+        'Reward not found',
+        `deleteReward: rewardId=${rewardId}`
+      );
+    }
+  }
 }
 
 export const rewardsService = new RewardsService();

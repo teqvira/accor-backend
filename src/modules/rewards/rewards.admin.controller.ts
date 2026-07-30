@@ -40,6 +40,11 @@ export class RewardsAdminController {
     const result = await rewardsService.createReward(req.body);
     sendSuccess(res, 'Reward created successfully', result, 201);
   }
+
+  async deleteReward(req: AuthRequest, res: Response): Promise<void> {
+    await rewardsService.deleteReward(getParam(req.params.rewardId));
+    res.status(204).send();
+  }
 }
 
 export const rewardsAdminController = new RewardsAdminController();

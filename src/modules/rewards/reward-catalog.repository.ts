@@ -181,5 +181,13 @@ export const rewardCatalogRepository = {
       total: Number(countResult.rows[0]?.count ?? 0),
     };
   },
+
+  deleteById: async (id: string): Promise<boolean> => {
+    const result = await pool.query(
+      `DELETE FROM reward_catalog WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
 };
 

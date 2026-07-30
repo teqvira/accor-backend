@@ -37,4 +37,12 @@ router.get(
   )
 );
 
+router.delete(
+  '/:rewardId',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.deleteReward(req, res)
+  )
+);
+
 export default router;
