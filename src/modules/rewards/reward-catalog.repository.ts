@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg';
 import pool from '../../database/connection';
-import { CreateRewardCatalogData, IRewardCatalogItem, RewardCategory } from './rewards.types';
+import { CreateRewardCatalogData, IRewardCatalogItem, RewardCategory, RewardStatus } from './rewards.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 
@@ -128,6 +128,58 @@ export const rewardCatalogRepository = {
        WHERE id = $1 AND stock_quantity IS NOT NULL`,
       [id]
     );
+  },
+
+  findAll: async (
+    page = 1,
+    limit = 20,
+    filters: {
+      category?: RewardCategory;
+      status?: RewardStatus;
+      search?: string;
+    } = {}
+  ): Promise<{ items: IRewardCatalogItem[]; total: number }> => {
+    const offset = (page - 1) * limit;
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (filters.category) {
+      conditions.push(`category = $${i++}`);
+      values.push(filters.category);
+    }
+
+    if (filters.status) {
+      conditions.push(`status = $${i++}`);
+      values.push(filters.status);
+    }
+
+    if (filters.search) {
+      conditions.push(`(name ILIKE $${i} OR code ILIKE $${i})`);
+      values.push(`%${filters.search}%`);
+      i++;
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [itemsResult, countResult] = await Promise.all([
+      pool.query<RewardCatalogRow>(
+        `SELECT ${COLS} FROM reward_catalog
+         ${where}
+         ORDER BY sort_order ASC, created_at DESC
+         LIMIT $${i++} OFFSET $${i}`,
+        [...values, limit, offset]
+      ),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM reward_catalog ${where}`,
+        values
+      ),
+    ]);
+
+    return {
+      items: itemsResult.rows.map(mapRow),
+      total: Number(countResult.rows[0]?.count ?? 0),
+    };
   },
 };
 

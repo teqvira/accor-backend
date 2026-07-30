@@ -4,9 +4,21 @@ import { validate } from '../../shared/middleware/validate';
 import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
 import { rewardsAdminController } from './rewards.admin.controller';
-import { createRewardSchema } from './rewards.validator';
+import {
+  adminRewardListQuerySchema,
+  createRewardSchema,
+} from './rewards.validator';
 
 const router = Router();
+
+router.get(
+  '/',
+  ...adminOnly,
+  validate(adminRewardListQuerySchema, 'query'),
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.listRewards(req, res)
+  )
+);
 
 router.post(
   '/',

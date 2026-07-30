@@ -346,6 +346,43 @@ export class RewardsService {
       updatedAt: item.updatedAt,
     };
   }
+
+  async listRewardsAdmin(
+    page = 1,
+    limit = 20,
+    filters?: {
+      category?: RewardCategory;
+      status?: RewardStatus;
+      search?: string;
+    }
+  ) {
+    const { items, total } = await rewardCatalogRepository.findAll(
+      page,
+      limit,
+      filters
+    );
+
+    return {
+      items: items.map((item) => ({
+        id: item._id,
+        code: item.code,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        pointsCost: item.pointsCost,
+        imageUrl: item.imageUrl,
+        stockQuantity: item.stockQuantity,
+        status: item.status,
+        sortOrder: item.sortOrder,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }
 
 export const rewardsService = new RewardsService();

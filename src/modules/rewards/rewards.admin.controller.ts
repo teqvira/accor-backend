@@ -1,10 +1,34 @@
 import { Response } from 'express';
-import { getParam } from '../../shared/utils/params';
+import {
+  getOptionalQueryParam,
+  getParam,
+  getQueryNumber,
+} from '../../shared/utils/params';
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from '../auth/auth.types';
 import { rewardsService } from './rewards.service';
+import { RewardCategory, RewardStatus } from './rewards.types';
 
 export class RewardsAdminController {
+  async listRewards(req: AuthRequest, res: Response): Promise<void> {
+    const page = getQueryNumber(req.query.page, 1);
+    const limit = getQueryNumber(req.query.limit, 20);
+    const category = getOptionalQueryParam(req.query.category) as
+      | RewardCategory
+      | undefined;
+    const status = getOptionalQueryParam(req.query.status) as
+      | RewardStatus
+      | undefined;
+    const search = getOptionalQueryParam(req.query.search);
+
+    const result = await rewardsService.listRewardsAdmin(page, limit, {
+      category,
+      status,
+      search,
+    });
+    sendSuccess(res, 'Rewards fetched successfully', result);
+  }
+
   async getUserRewards(req: AuthRequest, res: Response): Promise<void> {
     const result = await rewardsService.getUserRewardsAdmin(
       getParam(req.params.userId)
