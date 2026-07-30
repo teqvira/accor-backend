@@ -43,7 +43,7 @@ export class RewardsAdminController {
 
   async deleteReward(req: AuthRequest, res: Response): Promise<void> {
     await rewardsService.deleteReward(getParam(req.params.rewardId));
-    res.status(204).send();
+    sendSuccess(res, 'Reward deleted successfully', {}, 200);
   }
 
   async updateReward(req: AuthRequest, res: Response): Promise<void> {
