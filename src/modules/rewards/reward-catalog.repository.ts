@@ -244,5 +244,38 @@ export const rewardCatalogRepository = {
 
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
+
+  getStats: async (): Promise<{
+    total: number;
+    active: number;
+    upcoming: number;
+    inactive: number;
+    expired: number;
+  }> => {
+    const result = await pool.query<{
+      total: string;
+      active: string;
+      upcoming: string;
+      inactive: string;
+      expired: string;
+    }>(`
+      SELECT
+        COUNT(*)::text                                               AS total,
+        COUNT(*) FILTER (WHERE status = 'active')::text             AS active,
+        COUNT(*) FILTER (WHERE status = 'upcoming')::text           AS upcoming,
+        COUNT(*) FILTER (WHERE status = 'inactive')::text           AS inactive,
+        COUNT(*) FILTER (WHERE status = 'expired')::text            AS expired
+      FROM reward_catalog
+    `);
+
+    const row = result.rows[0];
+    return {
+      total: Number(row.total),
+      active: Number(row.active),
+      upcoming: Number(row.upcoming),
+      inactive: Number(row.inactive),
+      expired: Number(row.expired),
+    };
+  },
 };
 

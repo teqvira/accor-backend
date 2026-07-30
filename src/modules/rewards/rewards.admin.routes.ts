@@ -38,6 +38,14 @@ router.get(
   )
 );
 
+router.get(
+  '/stats',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.getStats(req, res)
+  )
+);
+
 router.delete(
   '/:rewardId',
   ...adminOnly,

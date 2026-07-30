@@ -53,6 +53,11 @@ export class RewardsAdminController {
     );
     sendSuccess(res, 'Reward updated successfully', result);
   }
+
+  async getStats(_req: AuthRequest, res: Response): Promise<void> {
+    const result = await rewardsService.getRewardStats();
+    sendSuccess(res, 'Reward stats fetched successfully', result);
+  }
 }
 
 export const rewardsAdminController = new RewardsAdminController();

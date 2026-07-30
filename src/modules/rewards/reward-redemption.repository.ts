@@ -82,4 +82,12 @@ export const rewardRedemptionRepository = {
     );
     return mapRow(result.rows[0]);
   },
+
+  getTotalCount: async (): Promise<number> => {
+    const result = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM reward_redemptions`
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  },
 };
+

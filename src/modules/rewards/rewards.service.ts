@@ -444,7 +444,26 @@ export class RewardsService {
       updatedAt: updated.updatedAt,
     };
   }
+
+  async getRewardStats() {
+    const [catalogStats, totalRedemptions] = await Promise.all([
+      rewardCatalogRepository.getStats(),
+      rewardRedemptionRepository.getTotalCount(),
+    ]);
+
+    return {
+      totalRewards: catalogStats.total,
+      activeRewards: catalogStats.active,
+      upcomingRewards: catalogStats.upcoming,
+      inactiveRewards: catalogStats.inactive,
+      expiredRewards: catalogStats.expired,
+      totalRedemptionRequests: totalRedemptions,
+      totalGiftsRedeemed: totalRedemptions, // same table — every row = 1 redeemed gift
+    };
+  }
 }
 
+
 export const rewardsService = new RewardsService();
+
 
