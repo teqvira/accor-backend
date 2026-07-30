@@ -12,12 +12,13 @@ import {
   ProfileUploadPurpose,
 } from './file-upload.constants';
 import { buildS3ObjectUrl } from '../../infrastructure/s3/s3.object-url';
-import { buildProductImageKey } from './product-image-key';
+import { buildProductImageKey, buildUploadImageKey } from './product-image-key';
 import { buildProfileUploadKey } from './profile-upload-key';
 
 export interface PresignedUploadInput {
   fileName: string;
   contentType: (typeof ALLOWED_IMAGE_TYPES)[number];
+  folder?: 'products' | 'rewards';
 }
 
 export interface ProfilePresignedUploadInput {
@@ -38,7 +39,7 @@ export class PresignedUrlService {
   async createProductImageUploadUrl(
     input: PresignedUploadInput
   ): Promise<PresignedUploadResult> {
-    const key = buildProductImageKey(input.fileName);
+    const key = buildUploadImageKey(input.fileName, input.folder || 'products');
 
     const command = new PutObjectCommand({
       Bucket: env.AWS_S3_BUCKET_NAME,

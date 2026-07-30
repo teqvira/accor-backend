@@ -5,6 +5,17 @@ import { ALLOWED_IMAGE_EXTENSIONS } from './file-upload.constants';
 import { sanitizeFilename } from './sanitize-filename';
 
 export function buildProductImageKey(fileName: string): string {
+  return buildUploadImageKey(fileName, 'products');
+}
+
+export function buildRewardImageKey(fileName: string): string {
+  return buildUploadImageKey(fileName, 'rewards');
+}
+
+export function buildUploadImageKey(
+  fileName: string,
+  folder: 'products' | 'rewards' = 'products'
+): string {
   const ext = path.extname(fileName).toLowerCase();
   const baseName = path.basename(fileName, ext);
   const safeName = sanitizeFilename(baseName);
@@ -14,7 +25,7 @@ export function buildProductImageKey(fileName: string): string {
     ? ext
     : '.jpg';
 
-  return `products/${randomUUID()}-${safeName}${safeExt}`;
+  return `${folder}/${randomUUID()}-${safeName}${safeExt}`;
 }
 
 export function isOwnBucketObjectUrl(url: string): boolean {
@@ -25,9 +36,11 @@ export function isOwnBucketObjectUrl(url: string): boolean {
 
     return (
       (parsed.hostname === bucketHost || parsed.hostname === legacyHost) &&
-      parsed.pathname.startsWith('/products/')
+      (parsed.pathname.startsWith('/products/') ||
+        parsed.pathname.startsWith('/rewards/'))
     );
   } catch {
     return false;
   }
 }
+

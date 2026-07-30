@@ -1,7 +1,7 @@
 // ---- Reward Catalog ----
 
 export type RewardCategory = 'electronics' | 'vouchers' | 'merchandise' | 'other';
-export type RewardStatus = 'active' | 'inactive';
+export type RewardStatus = 'active' | 'upcoming' | 'inactive' | 'expired';
 
 export interface IRewardCatalogItem {
   _id: string;
@@ -16,6 +16,18 @@ export interface IRewardCatalogItem {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface CreateRewardCatalogData {
+  name: string;
+  pointsCost: number;
+  status?: RewardStatus;
+  imageUrl?: string | null;
+  description?: string | null;
+  category?: RewardCategory;
+  stockQuantity?: number | null;
+  code?: string;
+  sortOrder?: number;
 }
 
 export interface IRewardRedemption {

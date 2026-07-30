@@ -15,6 +15,7 @@ export const presignedUploadSchema = z.object({
   contentType: z.enum(ALLOWED_IMAGE_TYPES, {
     message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
   }),
+  folder: z.enum(['products', 'rewards']).optional(),
 });
 
 export const profilePresignedUploadSchema = z

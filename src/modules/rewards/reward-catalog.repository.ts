@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg';
 import pool from '../../database/connection';
-import { IRewardCatalogItem, RewardCategory } from './rewards.types';
+import { CreateRewardCatalogData, IRewardCatalogItem, RewardCategory } from './rewards.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 
@@ -42,6 +42,33 @@ const COLS = `
 `;
 
 export const rewardCatalogRepository = {
+  create: async (
+    data: CreateRewardCatalogData,
+    client?: Queryable
+  ): Promise<IRewardCatalogItem> => {
+    const q = client || pool;
+    const result = await q.query<RewardCatalogRow>(
+      `INSERT INTO reward_catalog (
+        code, name, description, category, points_cost, image_url,
+        stock_quantity, status, sort_order
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING ${COLS}`,
+      [
+        data.code,
+        data.name,
+        data.description ?? null,
+        data.category ?? 'other',
+        data.pointsCost,
+        data.imageUrl ?? null,
+        data.stockQuantity ?? null,
+        data.status ?? 'active',
+        data.sortOrder ?? 0,
+      ]
+    );
+
+    return mapRow(result.rows[0]);
+  },
+
   findActive: async (
     page = 1,
     limit = 20,
@@ -103,3 +130,4 @@ export const rewardCatalogRepository = {
     );
   },
 };
+

@@ -16,6 +16,7 @@ import {
   IRewardTransaction,
   RewardCategory,
   RewardReferenceType,
+  RewardStatus,
   RewardTransactionType,
 } from './rewards.types';
 
@@ -297,6 +298,52 @@ export class RewardsService {
       mobileNumber: user.mobileNumber,
       name: user.name,
       rewardPoints: user.rewardPoints,
+    };
+  }
+
+  async createReward(input: {
+    name: string;
+    pointsCost?: number;
+    pointsRequired?: number;
+    status?: RewardStatus;
+    imageUrl?: string | null;
+    description?: string | null;
+    category?: RewardCategory;
+    stockQuantity?: number | null;
+    sortOrder?: number;
+  }) {
+    const pointsCost = input.pointsCost ?? input.pointsRequired;
+    if (!pointsCost || pointsCost <= 0) {
+      throw new BadRequestError('Points required must be a positive integer');
+    }
+
+    const code = `RWD_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const item = await rewardCatalogRepository.create({
+      code,
+      name: input.name,
+      pointsCost,
+      status: input.status ?? 'upcoming',
+      imageUrl: input.imageUrl ?? null,
+      description: input.description ?? null,
+      category: input.category ?? 'other',
+      stockQuantity: input.stockQuantity ?? null,
+      sortOrder: input.sortOrder ?? 0,
+    });
+
+    return {
+      id: item._id,
+      code: item.code,
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      pointsCost: item.pointsCost,
+      imageUrl: item.imageUrl,
+      stockQuantity: item.stockQuantity,
+      status: item.status,
+      sortOrder: item.sortOrder,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     };
   }
 }

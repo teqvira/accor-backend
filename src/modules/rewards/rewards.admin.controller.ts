@@ -11,6 +11,11 @@ export class RewardsAdminController {
     );
     sendSuccess(res, 'User rewards fetched successfully', result);
   }
+
+  async createReward(req: AuthRequest, res: Response): Promise<void> {
+    const result = await rewardsService.createReward(req.body);
+    sendSuccess(res, 'Reward created successfully', result, 201);
+  }
 }
 
 export const rewardsAdminController = new RewardsAdminController();
