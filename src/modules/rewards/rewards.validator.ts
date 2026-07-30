@@ -69,3 +69,35 @@ export const createRewardSchema = z.object({
   message: 'Points required is required',
   path: ['pointsRequired'],
 });
+
+export const updateRewardSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255).optional(),
+    pointsCost: z
+      .preprocess(
+        (val) => (val === undefined || val === null || val === '' ? undefined : val),
+        z.coerce.number().int().min(1)
+      )
+      .optional(),
+    pointsRequired: z
+      .preprocess(
+        (val) => (val === undefined || val === null || val === '' ? undefined : val),
+        z.coerce.number().int().min(1)
+      )
+      .optional(),
+    status: z.enum(REWARD_STATUSES).optional(),
+    category: z.enum(REWARD_CATEGORIES).optional(),
+    imageUrl: z.string().trim().url('Invalid image URL').nullable().optional(),
+    description: z.string().trim().nullable().optional(),
+    stockQuantity: z
+      .preprocess(
+        (val) => (val === undefined || val === null || val === '' ? null : val),
+        z.coerce.number().int().min(0).nullable()
+      )
+      .optional(),
+    sortOrder: z.coerce.number().int().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided to update',
+  });
+

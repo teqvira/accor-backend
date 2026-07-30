@@ -393,6 +393,58 @@ export class RewardsService {
       );
     }
   }
+
+  async updateReward(
+    rewardId: string,
+    input: {
+      name?: string;
+      pointsCost?: number;
+      pointsRequired?: number;
+      status?: RewardStatus;
+      imageUrl?: string | null;
+      description?: string | null;
+      category?: RewardCategory;
+      stockQuantity?: number | null;
+      sortOrder?: number;
+    }
+  ) {
+    // Accept either pointsCost or pointsRequired alias
+    const pointsCost = input.pointsCost ?? input.pointsRequired;
+
+    const updated = await rewardCatalogRepository.updateById(rewardId, {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(pointsCost !== undefined && { pointsCost }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...('imageUrl' in input && { imageUrl: input.imageUrl }),
+      ...('description' in input && { description: input.description }),
+      ...('stockQuantity' in input && { stockQuantity: input.stockQuantity }),
+      ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
+    });
+
+    if (!updated) {
+      throw new NotFoundError(
+        'Reward not found',
+        `updateReward: rewardId=${rewardId}`
+      );
+    }
+
+    return {
+      id: updated._id,
+      code: updated.code,
+      name: updated.name,
+      description: updated.description,
+      category: updated.category,
+      pointsCost: updated.pointsCost,
+      imageUrl: updated.imageUrl,
+      stockQuantity: updated.stockQuantity,
+      status: updated.status,
+      sortOrder: updated.sortOrder,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+  }
 }
 
 export const rewardsService = new RewardsService();
+

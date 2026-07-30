@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg';
 import pool from '../../database/connection';
-import { CreateRewardCatalogData, IRewardCatalogItem, RewardCategory, RewardStatus } from './rewards.types';
+import { CreateRewardCatalogData, IRewardCatalogItem, RewardCategory, RewardStatus, UpdateRewardCatalogData } from './rewards.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 
@@ -188,6 +188,61 @@ export const rewardCatalogRepository = {
       [id]
     );
     return (result.rowCount ?? 0) > 0;
+  },
+
+  updateById: async (
+    id: string,
+    data: UpdateRewardCatalogData
+  ): Promise<IRewardCatalogItem | null> => {
+    // Build SET clause dynamically — only update provided fields
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (data.name !== undefined) {
+      fields.push(`name = $${i++}`);
+      values.push(data.name);
+    }
+    if (data.pointsCost !== undefined) {
+      fields.push(`points_cost = $${i++}`);
+      values.push(data.pointsCost);
+    }
+    if (data.status !== undefined) {
+      fields.push(`status = $${i++}`);
+      values.push(data.status);
+    }
+    if (data.category !== undefined) {
+      fields.push(`category = $${i++}`);
+      values.push(data.category);
+    }
+    if ('imageUrl' in data) {
+      fields.push(`image_url = $${i++}`);
+      values.push(data.imageUrl ?? null);
+    }
+    if ('description' in data) {
+      fields.push(`description = $${i++}`);
+      values.push(data.description ?? null);
+    }
+    if ('stockQuantity' in data) {
+      fields.push(`stock_quantity = $${i++}`);
+      values.push(data.stockQuantity ?? null);
+    }
+    if (data.sortOrder !== undefined) {
+      fields.push(`sort_order = $${i++}`);
+      values.push(data.sortOrder);
+    }
+
+    if (fields.length === 0) return null;
+
+    fields.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const result = await pool.query<RewardCatalogRow>(
+      `UPDATE reward_catalog SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${COLS}`,
+      values
+    );
+
+    return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
 };
 

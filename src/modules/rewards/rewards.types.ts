@@ -30,6 +30,17 @@ export interface CreateRewardCatalogData {
   sortOrder?: number;
 }
 
+export interface UpdateRewardCatalogData {
+  name?: string;
+  pointsCost?: number;
+  status?: RewardStatus;
+  imageUrl?: string | null;
+  description?: string | null;
+  category?: RewardCategory;
+  stockQuantity?: number | null;
+  sortOrder?: number;
+}
+
 export interface IRewardRedemption {
   _id: string;
   userId: string;

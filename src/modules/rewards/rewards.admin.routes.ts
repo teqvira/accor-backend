@@ -7,6 +7,7 @@ import { rewardsAdminController } from './rewards.admin.controller';
 import {
   adminRewardListQuerySchema,
   createRewardSchema,
+  updateRewardSchema,
 } from './rewards.validator';
 
 const router = Router();
@@ -42,6 +43,15 @@ router.delete(
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
     rewardsAdminController.deleteReward(req, res)
+  )
+);
+
+router.patch(
+  '/:rewardId',
+  ...adminOnly,
+  validate(updateRewardSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.updateReward(req, res)
   )
 );
 
