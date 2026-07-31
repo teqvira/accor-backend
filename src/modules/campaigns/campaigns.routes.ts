@@ -27,6 +27,12 @@ router.get(
 );
 
 router.get(
+  '/stats',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) => campaignsController.getStats(req, res))
+);
+
+router.get(
   '/:id',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) => campaignsController.getById(req, res))

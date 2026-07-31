@@ -67,6 +67,11 @@ export class CampaignsController {
     sendSuccess(res, 'Campaign active status updated successfully', { campaign });
   }
 
+  async getStats(_req: AuthRequest, res: Response): Promise<void> {
+    const stats = await campaignsService.getCampaignStats();
+    sendSuccess(res, 'Campaign stats fetched successfully', { stats });
+  }
+
   async delete(req: AuthRequest, res: Response): Promise<void> {
     const id = getParam(req.params.id);
     const result = await campaignsService.deleteCampaign(id);
@@ -75,3 +80,4 @@ export class CampaignsController {
 }
 
 export const campaignsController = new CampaignsController();
+

@@ -416,4 +416,31 @@ export const campaignsRepository = {
     const validCount = Number(result.rows[0]?.count ?? 0);
     return validCount === batchIds.length;
   },
+
+  getStats: async (client?: PoolClient): Promise<{
+    totalCampaigns: number;
+    activeCampaigns: number;
+    upcomingCampaigns: number;
+  }> => {
+    const db = client || pool;
+    const result = await db.query<{
+      total_campaigns: string;
+      active_campaigns: string;
+      upcoming_campaigns: string;
+    }>(
+      `SELECT
+         COUNT(*)::text AS total_campaigns,
+         COUNT(*) FILTER (WHERE active = true AND start_date <= NOW() AND end_date >= NOW())::text AS active_campaigns,
+         COUNT(*) FILTER (WHERE active = true AND start_date > NOW())::text AS upcoming_campaigns
+       FROM campaigns`
+    );
+
+    const row = result.rows[0];
+    return {
+      totalCampaigns: Number(row?.total_campaigns ?? 0),
+      activeCampaigns: Number(row?.active_campaigns ?? 0),
+      upcomingCampaigns: Number(row?.upcoming_campaigns ?? 0),
+    };
+  },
 };
+

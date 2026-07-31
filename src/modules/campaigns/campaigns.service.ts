@@ -1,4 +1,4 @@
-import { withTransaction } from '../../database/transactions';
+  import { withTransaction } from '../../database/transactions';
 import {
   BadRequestError,
   ConflictError,
@@ -156,6 +156,11 @@ export class CampaignsService {
   async getActiveMultiplierForBatch(batchId: string) {
     return campaignsRepository.findActiveCampaignForBatch(batchId);
   }
+
+  async getCampaignStats() {
+    return campaignsRepository.getStats();
+  }
 }
 
 export const campaignsService = new CampaignsService();
+
