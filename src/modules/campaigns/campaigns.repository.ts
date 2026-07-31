@@ -31,9 +31,15 @@ interface CampaignRow {
 export function parseStartDate(dateInput: string | Date): Date {
   if (dateInput instanceof Date) return dateInput;
   const str = String(dateInput).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    const [y, m, d] = str.split('-').map(Number);
-    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, yStr, mStr, dStr] = match;
+    if (!str.includes('T') || str.includes('T00:00:00')) {
+      const y = Number(yStr);
+      const m = Number(mStr);
+      const d = Number(dStr);
+      return new Date(y, m - 1, d, 0, 0, 0, 0);
+    }
   }
   return new Date(str);
 }
@@ -41,9 +47,15 @@ export function parseStartDate(dateInput: string | Date): Date {
 export function parseEndDate(dateInput: string | Date): Date {
   if (dateInput instanceof Date) return dateInput;
   const str = String(dateInput).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    const [y, m, d] = str.split('-').map(Number);
-    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, yStr, mStr, dStr] = match;
+    if (!str.includes('T') || str.includes('T00:00:00') || str.includes('T23:59:59')) {
+      const y = Number(yStr);
+      const m = Number(mStr);
+      const d = Number(dStr);
+      return new Date(y, m - 1, d, 23, 59, 59, 999);
+    }
   }
   return new Date(str);
 }
@@ -55,8 +67,25 @@ export function computeCampaignStatus(
 ): CampaignStatus {
   if (!active) return CampaignStatus.INACTIVE;
   const now = new Date();
-  if (now < new Date(startDate)) return CampaignStatus.UPCOMING;
-  if (now > new Date(endDate)) return CampaignStatus.EXPIRED;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (now > end) return CampaignStatus.EXPIRED;
+
+  if (now < start) {
+    // If current local calendar date is on or after the start date's local calendar date,
+    // it is ACTIVE for the user!
+    const isSameOrPastDay =
+      now.getFullYear() > start.getFullYear() ||
+      (now.getFullYear() === start.getFullYear() &&
+        (now.getMonth() > start.getMonth() ||
+          (now.getMonth() === start.getMonth() && now.getDate() >= start.getDate())));
+
+    if (!isSameOrPastDay) {
+      return CampaignStatus.UPCOMING;
+    }
+  }
+
   return CampaignStatus.ACTIVE;
 }
 
@@ -209,11 +238,15 @@ export const campaignsRepository = {
 
     if (params.status) {
       if (params.status === CampaignStatus.ACTIVE) {
-        whereClauses.push(`c.active = true AND c.start_date <= NOW() AND c.end_date >= NOW()`);
+        whereClauses.push(
+          `c.active = true AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date >= (c.start_date AT TIME ZONE 'Asia/Kolkata')::date AND NOW() <= c.end_date`
+        );
       } else if (params.status === CampaignStatus.UPCOMING) {
-        whereClauses.push(`c.active = true AND c.start_date > NOW()`);
+        whereClauses.push(
+          `c.active = true AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date < (c.start_date AT TIME ZONE 'Asia/Kolkata')::date`
+        );
       } else if (params.status === CampaignStatus.EXPIRED) {
-        whereClauses.push(`c.active = true AND c.end_date < NOW()`);
+        whereClauses.push(`c.active = true AND NOW() > c.end_date`);
       } else if (params.status === CampaignStatus.INACTIVE) {
         whereClauses.push(`c.active = false`);
       }
@@ -394,7 +427,7 @@ export const campaignsRepository = {
        JOIN campaign_batches cb ON cb.campaign_id = c.id
        WHERE cb.batch_id = $1
          AND c.active = true
-         AND NOW() >= c.start_date
+         AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date >= (c.start_date AT TIME ZONE 'Asia/Kolkata')::date
          AND NOW() <= c.end_date
        ORDER BY c.multiplier DESC, c.created_at DESC
        LIMIT 1`,
@@ -451,8 +484,15 @@ export const campaignsRepository = {
     }>(
       `SELECT
          COUNT(*)::text AS total_campaigns,
-         COUNT(*) FILTER (WHERE active = true AND start_date <= NOW() AND end_date >= NOW())::text AS active_campaigns,
-         COUNT(*) FILTER (WHERE active = true AND start_date > NOW())::text AS upcoming_campaigns
+         COUNT(*) FILTER (
+           WHERE active = true
+             AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date >= (start_date AT TIME ZONE 'Asia/Kolkata')::date
+             AND NOW() <= end_date
+         )::text AS active_campaigns,
+         COUNT(*) FILTER (
+           WHERE active = true
+             AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date < (start_date AT TIME ZONE 'Asia/Kolkata')::date
+         )::text AS upcoming_campaigns
        FROM campaigns`
     );
 
