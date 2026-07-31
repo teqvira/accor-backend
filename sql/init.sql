@@ -12,3 +12,5 @@
 \i sql/migrations/012_user_profile_fields.sql
 \i sql/migrations/013_reward_store.sql
 \i sql/migrations/014_activity_feed_indexes.sql
+\i sql/migrations/015_reward_catalog_status.sql
+\i sql/migrations/016_reward_redemption_status.sql

@@ -17,6 +17,7 @@ interface RewardCatalogRow {
   sort_order: number;
   created_at: Date;
   updated_at: Date;
+  redeemed_count?: string | number;
 }
 
 function mapRow(row: RewardCatalogRow): IRewardCatalogItem {
@@ -31,6 +32,8 @@ function mapRow(row: RewardCatalogRow): IRewardCatalogItem {
     stockQuantity: row.stock_quantity,
     status: row.status as IRewardCatalogItem['status'],
     sortOrder: row.sort_order,
+    redeemedCount:
+      row.redeemed_count !== undefined ? Number(row.redeemed_count) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -130,6 +133,18 @@ export const rewardCatalogRepository = {
     );
   },
 
+  incrementStock: async (
+    id: string,
+    client: Queryable
+  ): Promise<void> => {
+    await client.query(
+      `UPDATE reward_catalog
+       SET stock_quantity = stock_quantity + 1, updated_at = NOW()
+       WHERE id = $1 AND stock_quantity IS NOT NULL`,
+      [id]
+    );
+  },
+
   findAll: async (
     page = 1,
     limit = 20,
@@ -145,17 +160,17 @@ export const rewardCatalogRepository = {
     let i = 1;
 
     if (filters.category) {
-      conditions.push(`category = $${i++}`);
+      conditions.push(`rc.category = $${i++}`);
       values.push(filters.category);
     }
 
     if (filters.status) {
-      conditions.push(`status = $${i++}`);
+      conditions.push(`rc.status = $${i++}`);
       values.push(filters.status);
     }
 
     if (filters.search) {
-      conditions.push(`(name ILIKE $${i} OR code ILIKE $${i})`);
+      conditions.push(`(rc.name ILIKE $${i} OR rc.code ILIKE $${i})`);
       values.push(`%${filters.search}%`);
       i++;
     }
@@ -164,14 +179,20 @@ export const rewardCatalogRepository = {
 
     const [itemsResult, countResult] = await Promise.all([
       pool.query<RewardCatalogRow>(
-        `SELECT ${COLS} FROM reward_catalog
+        `SELECT rc.id, rc.code, rc.name, rc.description, rc.category,
+                rc.points_cost, rc.image_url, rc.stock_quantity, rc.status,
+                rc.sort_order, rc.created_at, rc.updated_at,
+                COUNT(rr.id)::text AS redeemed_count
+         FROM reward_catalog rc
+         LEFT JOIN reward_redemptions rr ON rr.reward_id = rc.id
          ${where}
-         ORDER BY sort_order ASC, created_at DESC
+         GROUP BY rc.id
+         ORDER BY rc.sort_order ASC, rc.created_at DESC
          LIMIT $${i++} OFFSET $${i}`,
         [...values, limit, offset]
       ),
       pool.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM reward_catalog ${where}`,
+        `SELECT COUNT(*)::text AS count FROM reward_catalog rc ${where}`,
         values
       ),
     ]);

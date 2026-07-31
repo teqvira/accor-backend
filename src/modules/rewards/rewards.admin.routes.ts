@@ -5,8 +5,10 @@ import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
 import { rewardsAdminController } from './rewards.admin.controller';
 import {
+  adminRedemptionListQuerySchema,
   adminRewardListQuerySchema,
   createRewardSchema,
+  updateRedemptionStatusSchema,
   updateRewardSchema,
 } from './rewards.validator';
 
@@ -31,18 +33,37 @@ router.post(
 );
 
 router.get(
-  '/users/:userId',
-  ...adminOnly,
-  asyncHandler<AuthRequest>((req, res) =>
-    rewardsAdminController.getUserRewards(req, res)
-  )
-);
-
-router.get(
   '/stats',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
     rewardsAdminController.getStats(req, res)
+  )
+);
+
+// Must be registered before /:rewardId routes
+router.get(
+  '/redemptions',
+  ...adminOnly,
+  validate(adminRedemptionListQuerySchema, 'query'),
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.listRedemptions(req, res)
+  )
+);
+
+router.patch(
+  '/redemptions/:redemptionId',
+  ...adminOnly,
+  validate(updateRedemptionStatusSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.updateRedemptionStatus(req, res)
+  )
+);
+
+router.get(
+  '/users/:userId',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    rewardsAdminController.getUserRewards(req, res)
   )
 );
 

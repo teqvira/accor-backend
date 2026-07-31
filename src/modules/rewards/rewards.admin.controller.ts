@@ -7,7 +7,11 @@ import {
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from '../auth/auth.types';
 import { rewardsService } from './rewards.service';
-import { RewardCategory, RewardStatus } from './rewards.types';
+import {
+  RewardCategory,
+  RewardRedemptionStatus,
+  RewardStatus,
+} from './rewards.types';
 
 export class RewardsAdminController {
   async listRewards(req: AuthRequest, res: Response): Promise<void> {
@@ -27,6 +31,36 @@ export class RewardsAdminController {
       search,
     });
     sendSuccess(res, 'Rewards fetched successfully', result);
+  }
+
+  async listRedemptions(req: AuthRequest, res: Response): Promise<void> {
+    const page = getQueryNumber(req.query.page, 1);
+    const limit = getQueryNumber(req.query.limit, 20);
+    const status = getOptionalQueryParam(req.query.status) as
+      | RewardRedemptionStatus
+      | undefined;
+    const rewardId = getOptionalQueryParam(req.query.rewardId);
+    const search = getOptionalQueryParam(req.query.search);
+
+    const result = await rewardsService.listRedemptionsAdmin(page, limit, {
+      status,
+      rewardId,
+      search,
+    });
+    sendSuccess(res, 'Reward redemption requests fetched successfully', result);
+  }
+
+  async updateRedemptionStatus(req: AuthRequest, res: Response): Promise<void> {
+    const result = await rewardsService.updateRedemptionStatus(
+      getParam(req.params.redemptionId),
+      req.body.status,
+      req.body.adminNote
+    );
+    const message =
+      req.body.status === 'gifted'
+        ? 'Gift marked as redeemed successfully'
+        : 'Redemption request rejected successfully';
+    sendSuccess(res, message, result);
   }
 
   async getUserRewards(req: AuthRequest, res: Response): Promise<void> {

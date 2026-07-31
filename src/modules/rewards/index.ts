@@ -11,4 +11,5 @@ export type {
   IRewardRedemption,
   RewardCategory,
   RewardStatus,
+  RewardRedemptionStatus,
 } from './rewards.types';

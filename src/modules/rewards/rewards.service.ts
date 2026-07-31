@@ -16,6 +16,7 @@ import {
   IRewardTransaction,
   RewardCategory,
   RewardReferenceType,
+  RewardRedemptionStatus,
   RewardStatus,
   RewardTransactionType,
 } from './rewards.types';
@@ -25,6 +26,7 @@ function buildRedemptionResponse(redemption: IRewardRedemption) {
     redemption: {
       id: redemption._id,
       idempotencyKey: redemption.idempotencyKey,
+      status: redemption.status,
       reward: {
         id: redemption.rewardId,
         code: redemption.rewardCode,
@@ -35,6 +37,30 @@ function buildRedemptionResponse(redemption: IRewardRedemption) {
       remainingPoints: redemption.pointsBalanceAfter,
       redeemedAt: redemption.redeemedAt,
     },
+  };
+}
+
+function sanitizeAdminRedemption(redemption: IRewardRedemption) {
+  return {
+    id: redemption._id,
+    status: redemption.status,
+    adminNote: redemption.adminNote,
+    processedAt: redemption.processedAt,
+    user: {
+      id: redemption.userId,
+      name: redemption.userName ?? null,
+      mobileNumber: redemption.userMobileNumber ?? null,
+    },
+    reward: {
+      id: redemption.rewardId,
+      code: redemption.rewardCode,
+      name: redemption.rewardName,
+      imageUrl: redemption.rewardImageUrl,
+    },
+    pointsSpent: redemption.pointsSpent,
+    pointsBalanceAfter: redemption.pointsBalanceAfter,
+    redeemedAt: redemption.redeemedAt,
+    createdAt: redemption.createdAt,
   };
 }
 
@@ -374,6 +400,7 @@ export class RewardsService {
         stockQuantity: item.stockQuantity,
         status: item.status,
         sortOrder: item.sortOrder,
+        redeemedCount: item.redeemedCount ?? 0,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })),
@@ -382,6 +409,99 @@ export class RewardsService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async listRedemptionsAdmin(
+    page = 1,
+    limit = 20,
+    filters?: {
+      status?: RewardRedemptionStatus;
+      search?: string;
+      rewardId?: string;
+    }
+  ) {
+    const { items, total } = await rewardRedemptionRepository.findAllAdmin(
+      page,
+      limit,
+      filters
+    );
+
+    return {
+      items: items.map(sanitizeAdminRedemption),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async updateRedemptionStatus(
+    redemptionId: string,
+    status: 'gifted' | 'rejected',
+    adminNote?: string | null
+  ) {
+    return withTransaction(async (client) => {
+      const redemption = await rewardRedemptionRepository.findByIdForUpdate(
+        redemptionId,
+        client
+      );
+      if (!redemption) {
+        throw new NotFoundError(
+          'Redemption request not found',
+          `updateRedemptionStatus: redemptionId=${redemptionId}`
+        );
+      }
+
+      if (redemption.status !== 'pending') {
+        throw new BadRequestError(
+          `This request is already ${redemption.status}`,
+          `updateRedemptionStatus: status=${redemption.status}`
+        );
+      }
+
+      if (status === 'rejected') {
+        const reward = await rewardCatalogRepository.findByIdForUpdate(
+          redemption.rewardId,
+          client
+        );
+        if (reward && reward.stockQuantity !== null) {
+          await rewardCatalogRepository.incrementStock(
+            redemption.rewardId,
+            client
+          );
+        }
+
+        await this.creditInSession(
+          redemption.userId,
+          redemption.pointsSpent,
+          redemption._id,
+          `Gift redemption rejected: ${redemption.rewardName}`,
+          client,
+          'admin_adjustment'
+        );
+      }
+
+      const updated = await rewardRedemptionRepository.updateStatus(
+        redemptionId,
+        status,
+        adminNote ?? null,
+        client
+      );
+
+      if (!updated) {
+        throw new NotFoundError(
+          'Redemption request not found',
+          `updateRedemptionStatus: update failed redemptionId=${redemptionId}`
+        );
+      }
+
+      const user = await userRepository.findById(updated.userId, { client });
+      return sanitizeAdminRedemption({
+        ...updated,
+        userName: user?.name ?? null,
+        userMobileNumber: user?.mobileNumber ?? null,
+      });
+    });
   }
 
   async deleteReward(rewardId: string): Promise<void> {
@@ -446,10 +566,13 @@ export class RewardsService {
   }
 
   async getRewardStats() {
-    const [catalogStats, totalRedemptions] = await Promise.all([
-      rewardCatalogRepository.getStats(),
-      rewardRedemptionRepository.getTotalCount(),
-    ]);
+    const [catalogStats, totalRedemptions, pendingRequests, giftsRedeemed] =
+      await Promise.all([
+        rewardCatalogRepository.getStats(),
+        rewardRedemptionRepository.getTotalCount(),
+        rewardRedemptionRepository.getCountByStatus('pending'),
+        rewardRedemptionRepository.getCountByStatus('gifted'),
+      ]);
 
     return {
       totalRewards: catalogStats.total,
@@ -458,7 +581,8 @@ export class RewardsService {
       inactiveRewards: catalogStats.inactive,
       expiredRewards: catalogStats.expired,
       totalRedemptionRequests: totalRedemptions,
-      totalGiftsRedeemed: totalRedemptions, // same table — every row = 1 redeemed gift
+      pendingRedemptionRequests: pendingRequests,
+      totalGiftsRedeemed: giftsRedeemed,
     };
   }
 }

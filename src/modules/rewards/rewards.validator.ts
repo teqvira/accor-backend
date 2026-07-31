@@ -15,6 +15,12 @@ export const REWARD_STATUSES = [
   'expired',
 ] as const;
 
+export const REWARD_REDEMPTION_STATUSES = [
+  'pending',
+  'gifted',
+  'rejected',
+] as const;
+
 export const rewardStoreQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce
@@ -32,6 +38,19 @@ export const adminRewardListQuerySchema = z.object({
   category: z.enum(REWARD_CATEGORIES).optional(),
   status: z.enum(REWARD_STATUSES).optional(),
   search: z.string().trim().optional(),
+});
+
+export const adminRedemptionListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(REWARD_REDEMPTION_STATUSES).optional(),
+  rewardId: z.string().uuid().optional(),
+  search: z.string().trim().optional(),
+});
+
+export const updateRedemptionStatusSchema = z.object({
+  status: z.enum(['gifted', 'rejected']),
+  adminNote: z.string().trim().max(500).nullable().optional(),
 });
 
 export const redeemRewardSchema = z.object({

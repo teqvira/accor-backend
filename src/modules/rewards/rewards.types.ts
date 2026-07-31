@@ -14,6 +14,7 @@ export interface IRewardCatalogItem {
   stockQuantity: number | null;
   status: RewardStatus;
   sortOrder: number;
+  redeemedCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +42,8 @@ export interface UpdateRewardCatalogData {
   sortOrder?: number;
 }
 
+export type RewardRedemptionStatus = 'pending' | 'gifted' | 'rejected';
+
 export interface IRewardRedemption {
   _id: string;
   userId: string;
@@ -51,8 +54,14 @@ export interface IRewardRedemption {
   rewardImageUrl: string | null;
   pointsSpent: number;
   pointsBalanceAfter: number;
+  status: RewardRedemptionStatus;
+  adminNote: string | null;
+  processedAt: Date | null;
   redeemedAt: Date;
   createdAt: Date;
+  /** Joined from users on admin listing */
+  userName?: string | null;
+  userMobileNumber?: string | null;
 }
 
 export interface CreateRewardRedemptionData {
@@ -64,6 +73,7 @@ export interface CreateRewardRedemptionData {
   rewardImageUrl: string | null;
   pointsSpent: number;
   pointsBalanceAfter: number;
+  status?: RewardRedemptionStatus;
 }
 
 // ---- Reward Transactions ----
