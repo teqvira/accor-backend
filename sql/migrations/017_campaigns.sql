@@ -12,15 +12,15 @@ CREATE TABLE IF NOT EXISTS campaigns (
 
   multiplier NUMERIC(4, 2) NOT NULL DEFAULT 1.0,
 
-  start_date TIMESTAMP NOT NULL,
-  end_date TIMESTAMP NOT NULL,
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ NOT NULL,
 
   active BOOLEAN NOT NULL DEFAULT true,
 
   created_by UUID REFERENCES users (id),
 
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_product ON campaigns (product_id);

@@ -28,6 +28,26 @@ interface CampaignRow {
   batches_info?: any[] | null;
 }
 
+export function parseStartDate(dateInput: string | Date): Date {
+  if (dateInput instanceof Date) return dateInput;
+  const str = String(dateInput).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+  return new Date(str);
+}
+
+export function parseEndDate(dateInput: string | Date): Date {
+  if (dateInput instanceof Date) return dateInput;
+  const str = String(dateInput).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  return new Date(str);
+}
+
 export function computeCampaignStatus(
   startDate: Date,
   endDate: Date,
@@ -108,12 +128,13 @@ export const campaignsRepository = {
         data.name,
         data.productId,
         data.multiplier,
-        new Date(data.startDate),
-        new Date(data.endDate),
+        parseStartDate(data.startDate),
+        parseEndDate(data.endDate),
         data.active ?? true,
         data.createdBy || null,
       ]
     );
+
 
     const campaignId = result.rows[0].id;
 
@@ -303,13 +324,13 @@ export const campaignsRepository = {
 
     if (data.startDate !== undefined) {
       setClauses.push(`start_date = $${paramIdx}`);
-      queryParams.push(new Date(data.startDate));
+      queryParams.push(parseStartDate(data.startDate));
       paramIdx++;
     }
 
     if (data.endDate !== undefined) {
       setClauses.push(`end_date = $${paramIdx}`);
-      queryParams.push(new Date(data.endDate));
+      queryParams.push(parseEndDate(data.endDate));
       paramIdx++;
     }
 

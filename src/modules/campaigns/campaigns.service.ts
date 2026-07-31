@@ -5,7 +5,11 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { productsService } from '../products/products.service';
-import { campaignsRepository } from './campaigns.repository';
+import {
+  campaignsRepository,
+  parseEndDate,
+  parseStartDate,
+} from './campaigns.repository';
 import {
   CampaignFilterParams,
   CreateCampaignInput,
@@ -105,8 +109,8 @@ export class CampaignsService {
       }
     }
 
-    const startDate = input.startDate ? new Date(input.startDate) : campaign.startDate;
-    const endDate = input.endDate ? new Date(input.endDate) : campaign.endDate;
+    const startDate = input.startDate ? parseStartDate(input.startDate) : campaign.startDate;
+    const endDate = input.endDate ? parseEndDate(input.endDate) : campaign.endDate;
     if (endDate <= startDate) {
       throw new BadRequestError(
         'End date must be after start date',
