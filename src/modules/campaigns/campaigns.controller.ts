@@ -54,19 +54,18 @@ export class CampaignsController {
     sendSuccess(res, 'Campaign updated successfully', { campaign });
   }
 
-  async updateStatus(req: AuthRequest, res: Response): Promise<void> {
+  async updateActive(req: AuthRequest, res: Response): Promise<void> {
     const id = getParam(req.params.id);
-    const { status } = req.body;
-    if (!status || !Object.values(CampaignStatus).includes(status as CampaignStatus)) {
+    const { active } = req.body;
+    if (typeof active !== 'boolean') {
       throw new BadRequestError(
-        'Invalid status. Allowed values are: active, inactive, expired',
-        `updateStatus: status=${status}`
+        'Field "active" must be a boolean (true or false)',
+        `updateActive: active=${active}`
       );
     }
-    const campaign = await campaignsService.updateCampaignStatus(id, status as CampaignStatus);
-    sendSuccess(res, 'Campaign status updated successfully', { campaign });
+    const campaign = await campaignsService.updateCampaignActive(id, active);
+    sendSuccess(res, 'Campaign active status updated successfully', { campaign });
   }
-
 
   async delete(req: AuthRequest, res: Response): Promise<void> {
     const id = getParam(req.params.id);

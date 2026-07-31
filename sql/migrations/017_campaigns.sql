@@ -15,10 +15,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   start_date TIMESTAMP NOT NULL,
   end_date TIMESTAMP NOT NULL,
 
-  status VARCHAR(20) NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active', 'inactive', 'expired')),
-
-  description TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
 
   created_by UUID REFERENCES users (id),
 
@@ -27,7 +24,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_product ON campaigns (product_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns (status);
+CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns (active);
 CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns (start_date, end_date);
 
 CREATE TABLE IF NOT EXISTS campaign_batches (

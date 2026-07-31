@@ -40,10 +40,10 @@ router.patch(
 );
 
 router.patch(
-  '/:id/status',
+  '/:id/active',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
-    campaignsController.updateStatus(req, res)
+    campaignsController.updateActive(req, res)
   )
 );
 

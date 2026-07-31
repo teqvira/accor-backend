@@ -1,7 +1,8 @@
 export enum CampaignStatus {
   ACTIVE = 'active',
-  INACTIVE = 'inactive',
+  UPCOMING = 'upcoming',
   EXPIRED = 'expired',
+  INACTIVE = 'inactive',
 }
 
 export interface ICampaign {
@@ -12,8 +13,8 @@ export interface ICampaign {
   multiplier: number;
   startDate: Date;
   endDate: Date;
+  active: boolean;
   status: CampaignStatus;
-  description?: string;
   batchIds: string[];
   createdBy?: string;
   createdAt: Date;
@@ -41,8 +42,7 @@ export interface CreateCampaignInput {
   startDate: string;
   endDate: string;
   batchIds: string[];
-  description?: string;
-  status?: CampaignStatus;
+  active?: boolean;
 }
 
 export interface UpdateCampaignInput {
@@ -53,8 +53,7 @@ export interface UpdateCampaignInput {
   startDate?: string;
   endDate?: string;
   batchIds?: string[];
-  description?: string;
-  status?: CampaignStatus;
+  active?: boolean;
 }
 
 export interface CampaignFilterParams {
@@ -63,6 +62,7 @@ export interface CampaignFilterParams {
   search?: string;
   productId?: string;
   status?: CampaignStatus;
+  active?: boolean;
 }
 
 export interface ActiveCampaignMultiplier {

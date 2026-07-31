@@ -17,8 +17,7 @@ interface CampaignRow {
   multiplier: string | number;
   start_date: Date;
   end_date: Date;
-  status: CampaignStatus;
-  description: string | null;
+  active: boolean;
   created_by: string | null;
   created_at: Date;
   updated_at: Date;
@@ -29,7 +28,25 @@ interface CampaignRow {
   batches_info?: any[] | null;
 }
 
+export function computeCampaignStatus(
+  startDate: Date,
+  endDate: Date,
+  active: boolean
+): CampaignStatus {
+  if (!active) return CampaignStatus.INACTIVE;
+  const now = new Date();
+  if (now < new Date(startDate)) return CampaignStatus.UPCOMING;
+  if (now > new Date(endDate)) return CampaignStatus.EXPIRED;
+  return CampaignStatus.ACTIVE;
+}
+
 function mapCampaignRow(row: CampaignRow): ICampaign {
+  const status = computeCampaignStatus(
+    row.start_date,
+    row.end_date,
+    row.active
+  );
+
   const campaign: ICampaign = {
     _id: row.id,
     campaignCode: row.campaign_code,
@@ -38,8 +55,8 @@ function mapCampaignRow(row: CampaignRow): ICampaign {
     multiplier: Number(row.multiplier),
     startDate: row.start_date,
     endDate: row.end_date,
-    status: row.status,
-    description: row.description ?? undefined,
+    active: row.active,
+    status,
     batchIds: row.batch_ids ?? [],
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
@@ -74,7 +91,6 @@ function mapCampaignRow(row: CampaignRow): ICampaign {
   return campaign;
 }
 
-
 export const campaignsRepository = {
   create: async (
     data: CreateCampaignInput & { campaignCode: string; createdBy?: string },
@@ -84,8 +100,8 @@ export const campaignsRepository = {
 
     const result = await db.query<CampaignRow>(
       `INSERT INTO campaigns
-         (campaign_code, name, product_id, multiplier, start_date, end_date, status, description, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (campaign_code, name, product_id, multiplier, start_date, end_date, active, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         data.campaignCode,
@@ -94,8 +110,7 @@ export const campaignsRepository = {
         data.multiplier,
         new Date(data.startDate),
         new Date(data.endDate),
-        data.status || CampaignStatus.ACTIVE,
-        data.description || null,
+        data.active ?? true,
         data.createdBy || null,
       ]
     );
@@ -172,9 +187,15 @@ export const campaignsRepository = {
     let paramIdx = 1;
 
     if (params.status) {
-      whereClauses.push(`c.status = $${paramIdx}`);
-      queryParams.push(params.status);
-      paramIdx++;
+      if (params.status === CampaignStatus.ACTIVE) {
+        whereClauses.push(`c.active = true AND c.start_date <= NOW() AND c.end_date >= NOW()`);
+      } else if (params.status === CampaignStatus.UPCOMING) {
+        whereClauses.push(`c.active = true AND c.start_date > NOW()`);
+      } else if (params.status === CampaignStatus.EXPIRED) {
+        whereClauses.push(`c.active = true AND c.end_date < NOW()`);
+      } else if (params.status === CampaignStatus.INACTIVE) {
+        whereClauses.push(`c.active = false`);
+      }
     }
 
     if (params.productId) {
@@ -292,15 +313,9 @@ export const campaignsRepository = {
       paramIdx++;
     }
 
-    if (data.status !== undefined) {
-      setClauses.push(`status = $${paramIdx}`);
-      queryParams.push(data.status);
-      paramIdx++;
-    }
-
-    if (data.description !== undefined) {
-      setClauses.push(`description = $${paramIdx}`);
-      queryParams.push(data.description);
+    if (data.active !== undefined) {
+      setClauses.push(`active = $${paramIdx}`);
+      queryParams.push(data.active);
       paramIdx++;
     }
 
@@ -357,7 +372,7 @@ export const campaignsRepository = {
        FROM campaigns c
        JOIN campaign_batches cb ON cb.campaign_id = c.id
        WHERE cb.batch_id = $1
-         AND c.status = 'active'
+         AND c.active = true
          AND NOW() >= c.start_date
          AND NOW() <= c.end_date
        ORDER BY c.multiplier DESC, c.created_at DESC
@@ -402,4 +417,3 @@ export const campaignsRepository = {
     return validCount === batchIds.length;
   },
 };
-

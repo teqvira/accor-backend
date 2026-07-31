@@ -27,8 +27,7 @@ export const createCampaignSchema = z.object({
   batchIds: z
     .array(z.string().uuid('Invalid Batch ID'))
     .min(1, 'At least one batch/coupon must be selected'),
-  description: emptyToUndefined(z.string().trim().max(1000).optional()),
-  status: z.nativeEnum(CampaignStatus).optional().default(CampaignStatus.ACTIVE),
+  active: z.boolean().optional().default(true),
 }).refine((data) => new Date(data.endDate) > new Date(data.startDate), {
   message: 'End date must be after start date',
   path: ['endDate'],
@@ -58,8 +57,7 @@ export const updateCampaignSchema = z.object({
   batchIds: emptyToUndefined(
     z.array(z.string().uuid('Invalid Batch ID')).min(1, 'At least one batch/coupon must be selected').optional()
   ),
-  description: emptyToUndefined(z.string().trim().max(1000).optional()),
-  status: emptyToUndefined(z.nativeEnum(CampaignStatus).optional()),
+  active: z.boolean().optional(),
 });
 
 export const listCampaignsQuerySchema = z.object({

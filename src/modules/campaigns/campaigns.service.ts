@@ -8,7 +8,6 @@ import { productsService } from '../products/products.service';
 import { campaignsRepository } from './campaigns.repository';
 import {
   CampaignFilterParams,
-  CampaignStatus,
   CreateCampaignInput,
   ICampaign,
   UpdateCampaignInput,
@@ -141,11 +140,11 @@ export class CampaignsService {
     });
   }
 
-  async updateCampaignStatus(
+  async updateCampaignActive(
     id: string,
-    status: CampaignStatus
+    active: boolean
   ): Promise<ICampaign> {
-    return this.updateCampaign(id, { status });
+    return this.updateCampaign(id, { active });
   }
 
   async deleteCampaign(id: string): Promise<{ success: boolean }> {
@@ -158,6 +157,5 @@ export class CampaignsService {
     return campaignsRepository.findActiveCampaignForBatch(batchId);
   }
 }
-
 
 export const campaignsService = new CampaignsService();
