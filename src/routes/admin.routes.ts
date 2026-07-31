@@ -8,6 +8,7 @@ import { productsRoutes } from '../modules/products/index';
 import { qrRoutes } from '../modules/qr/index';
 import { dashboardRoutes } from '../modules/dashboard/index';
 import { transactionsRoutes } from '../modules/transactions/index';
+import { campaignsRoutes } from '../modules/campaigns/index';
 
 export function registerAdminRoutes(app: Express): void {
   app.use('/api/auth', authAdminRoutes);
@@ -19,4 +20,6 @@ export function registerAdminRoutes(app: Express): void {
   app.use('/api/qr', qrRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/transactions', transactionsRoutes);
+  app.use('/api/campaigns', campaignsRoutes);
 }
+

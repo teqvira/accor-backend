@@ -15,6 +15,8 @@ interface RedemptionTransactionRow {
   product_id: string;
   wallet_amount: string | number;
   reward_points: number;
+  campaign_id?: string | null;
+  multiplier_applied?: string | number | null;
   redeemed_at: Date;
   created_at: Date;
 }
@@ -30,6 +32,8 @@ export function mapRedemptionTransactionRow(
     productId: row.product_id,
     walletAmount: Number(row.wallet_amount),
     rewardPoints: row.reward_points,
+    campaignId: row.campaign_id ?? undefined,
+    multiplierApplied: row.multiplier_applied ? Number(row.multiplier_applied) : undefined,
     redeemedAt: row.redeemed_at,
     createdAt: row.created_at,
   };
@@ -37,7 +41,7 @@ export function mapRedemptionTransactionRow(
 
 const TX_COLUMNS = `
   id, user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points,
-  redeemed_at, created_at
+  campaign_id, multiplier_applied, redeemed_at, created_at
 `;
 
 export const redemptionTransactionRepository = {
@@ -48,8 +52,8 @@ export const redemptionTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<RedemptionTransactionRow>(
       `INSERT INTO redemption_transactions
-         (user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points, redeemed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()))
+         (user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points, campaign_id, multiplier_applied, redeemed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()))
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
@@ -58,11 +62,14 @@ export const redemptionTransactionRepository = {
         data.productId,
         data.walletAmount,
         data.rewardPoints,
+        data.campaignId ?? null,
+        data.multiplierApplied ?? 1.0,
         data.redeemedAt ?? null,
       ]
     );
     return mapRedemptionTransactionRow(result.rows[0]);
   },
+
 
   findById: async (id: string): Promise<IRedemptionTransaction | null> => {
     const result = await pool.query<RedemptionTransactionRow>(

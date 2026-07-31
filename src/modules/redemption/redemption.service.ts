@@ -4,6 +4,7 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../shared/utils/errors';
+import { campaignsService } from '../campaigns/campaigns.service';
 import { productsService } from '../products/products.service';
 import { qrBatchRepository } from '../qr/repositories/qr-batch.repository';
 import { qrBatchService } from '../qr/services/qr-batch.service';
@@ -48,6 +49,12 @@ export class RedemptionService {
       );
     }
 
+    // Check for active campaign multiplier
+    const activeCampaign = await campaignsService.getActiveMultiplierForBatch(batch._id);
+    const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
+    const effectiveWalletAmount = Number((batch.walletAmount * multiplier).toFixed(2));
+    const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+
     return {
       code: qrCode.code,
       product: batch.product
@@ -60,9 +67,19 @@ export class RedemptionService {
       batch: {
         id: batch._id,
         name: batch.name,
-        walletAmount: batch.walletAmount,
-        rewardPoints: batch.rewardPoints,
+        baseWalletAmount: batch.walletAmount,
+        baseRewardPoints: batch.rewardPoints,
+        walletAmount: effectiveWalletAmount,
+        rewardPoints: effectiveRewardPoints,
       },
+      campaign: activeCampaign
+        ? {
+            id: activeCampaign.campaignId,
+            code: activeCampaign.campaignCode,
+            name: activeCampaign.campaignName,
+            multiplier: activeCampaign.multiplier,
+          }
+        : null,
       redeemable: true,
     };
   }
@@ -100,6 +117,11 @@ export class RedemptionService {
         );
       }
 
+      const activeCampaign = await campaignsService.getActiveMultiplierForBatch(batch._id);
+      const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
+      const effectiveWalletAmount = Number((batch.walletAmount * multiplier).toFixed(2));
+      const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+
       const updatedQr = await qrCodeRepository.markRedeemedByCode(
         code,
         userId,
@@ -113,20 +135,24 @@ export class RedemptionService {
         );
       }
 
+      const remarkText = activeCampaign
+        ? `QR redemption: ${code} (${activeCampaign.campaignName} - ${multiplier}x)`
+        : `QR redemption: ${code}`;
+
       await walletService.creditInSession(
         updatedQr.redeemedBy!,
-        batch.walletAmount,
+        effectiveWalletAmount,
         updatedQr._id,
-        `QR redemption: ${code}`,
+        remarkText,
         client,
         'qr_redemption'
       );
 
       await rewardsService.creditInSession(
         updatedQr.redeemedBy!,
-        batch.rewardPoints,
+        effectiveRewardPoints,
         updatedQr._id,
-        `QR redemption: ${code}`,
+        remarkText,
         client,
         'qr_redemption'
       );
@@ -137,8 +163,10 @@ export class RedemptionService {
           qrCodeId: updatedQr._id,
           batchId: batch._id,
           productId: batch.productId!,
-          walletAmount: batch.walletAmount,
-          rewardPoints: batch.rewardPoints,
+          walletAmount: effectiveWalletAmount,
+          rewardPoints: effectiveRewardPoints,
+          campaignId: activeCampaign?.campaignId,
+          multiplierApplied: multiplier,
           redeemedAt: updatedQr.redeemedAt,
         },
         client
@@ -150,8 +178,15 @@ export class RedemptionService {
           code,
           batchName: batch.name,
           productName: batch.product?.name,
-          walletAmount: batch.walletAmount,
-          rewardPoints: batch.rewardPoints,
+          walletAmount: effectiveWalletAmount,
+          rewardPoints: effectiveRewardPoints,
+          campaign: activeCampaign
+            ? {
+                id: activeCampaign.campaignId,
+                name: activeCampaign.campaignName,
+                multiplier,
+              }
+            : null,
           redeemedAt: updatedQr.redeemedAt,
         },
       };
@@ -160,3 +195,4 @@ export class RedemptionService {
 }
 
 export const redemptionService = new RedemptionService();
+

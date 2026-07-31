@@ -6,6 +6,8 @@ export interface IRedemptionTransaction {
   productId: string;
   walletAmount: number;
   rewardPoints: number;
+  campaignId?: string;
+  multiplierApplied?: number;
   redeemedAt: Date;
   createdAt: Date;
 }
@@ -17,5 +19,8 @@ export interface CreateRedemptionTransactionData {
   productId: string;
   walletAmount: number;
   rewardPoints: number;
+  campaignId?: string;
+  multiplierApplied?: number;
   redeemedAt?: Date;
 }
+
