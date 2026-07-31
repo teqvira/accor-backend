@@ -13,6 +13,7 @@ import {
   CreateBatchInput,
   IQrBatch,
   QrBatchListItem,
+  QrBatchOptionItem,
   QrBatchStatus,
   QrCodeListFilters,
 } from '../qr.types';
@@ -246,6 +247,31 @@ export class QrBatchService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  async getBatchesOptions(productId?: string): Promise<QrBatchOptionItem[]> {
+    const batches = await qrBatchRepository.findOptionsByProductId(productId);
+    return batches.map((batch) => ({
+      id: batch._id,
+      value: batch._id,
+      label: batch.name,
+      batchName: batch.name,
+      couponName: batch.couponName ?? '',
+      productId: batch.productId,
+      productName: batch.product?.name ?? '',
+      productSku: batch.product?.skuCode ?? '',
+      walletAmount: batch.walletAmount,
+      couponValue: batch.walletAmount,
+      rewardPoints: batch.rewardPoints,
+      totalQrs: batch.totalQrs,
+      generatedCount: batch.generatedCount,
+      status: batch.status,
+      active: batch.active,
+      startDate: formatDate(batch.startDate),
+      endDate: formatDate(batch.endDate),
+      createdAt: batch.createdAt,
+    }));
+  }
 }
+
 
 export const qrBatchService = new QrBatchService();

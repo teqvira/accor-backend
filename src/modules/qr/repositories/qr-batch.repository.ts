@@ -229,4 +229,35 @@ export const qrBatchRepository = {
     );
     return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
   },
+
+  findOptionsByProductId: async (productId?: string): Promise<IQrBatch[]> => {
+    if (productId) {
+      const result = await pool.query<QrBatchRow>(
+        `SELECT ${BATCH_COLUMNS},
+                p.sku_code AS product_sku_code,
+                p.name AS product_name,
+                p.image_url AS product_image_url,
+                p.color AS product_color
+         FROM qr_batches b
+         LEFT JOIN products p ON p.id = b.product_id
+         WHERE b.product_id = $1
+         ORDER BY b.created_at DESC`,
+        [productId]
+      );
+      return result.rows.map(mapQrBatchRow);
+    } else {
+      const result = await pool.query<QrBatchRow>(
+        `SELECT ${BATCH_COLUMNS},
+                p.sku_code AS product_sku_code,
+                p.name AS product_name,
+                p.image_url AS product_image_url,
+                p.color AS product_color
+         FROM qr_batches b
+         LEFT JOIN products p ON p.id = b.product_id
+         ORDER BY b.created_at DESC`
+      );
+      return result.rows.map(mapQrBatchRow);
+    }
+  },
 };
+

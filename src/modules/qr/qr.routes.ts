@@ -22,6 +22,18 @@ router.get(
 );
 
 router.get(
+  '/batches-option',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) => qrController.getBatchesOptions(req, res))
+);
+
+router.get(
+  '/batches-option/:productId',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) => qrController.getBatchesOptions(req, res))
+);
+
+router.get(
   '/batches/:id',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) => qrController.getBatch(req, res))

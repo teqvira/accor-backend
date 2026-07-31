@@ -76,6 +76,17 @@ export class QrController {
       limit,
     });
   }
+
+  async getBatchesOptions(req: AuthRequest, res: Response): Promise<void> {
+    const productId =
+      getOptionalQueryParam(req.params.productId) ||
+      getOptionalQueryParam(req.params.id) ||
+      getOptionalQueryParam(req.query.productId);
+
+    const result = await qrBatchService.getBatchesOptions(productId);
+    sendSuccess(res, 'QR batches options fetched successfully', result);
+  }
 }
+
 
 export const qrController = new QrController();

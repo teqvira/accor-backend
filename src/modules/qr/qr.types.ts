@@ -96,3 +96,25 @@ export interface QrBatchListItem {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface QrBatchOptionItem {
+  id: string;
+  value: string;
+  label: string;
+  batchName: string;
+  couponName: string;
+  productId?: string;
+  productName: string;
+  productSku: string;
+  walletAmount: number;
+  couponValue: number;
+  rewardPoints: number;
+  totalQrs: number;
+  generatedCount: number;
+  status: QrBatchStatus;
+  active: boolean;
+  startDate?: string;
+  endDate?: string;
+  createdAt: Date;
+}
+
