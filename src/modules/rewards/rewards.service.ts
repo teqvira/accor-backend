@@ -6,6 +6,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
+import { assertPartnerApproved } from '../partners/partners.service';
 import { rewardCatalogRepository } from './reward-catalog.repository';
 import { rewardRedemptionRepository } from './reward-redemption.repository';
 import { rewardTransactionRepository } from './reward-transaction.repository';
@@ -214,6 +215,8 @@ export class RewardsService {
     rewardId: string,
     idempotencyKey: string
   ) {
+    await assertPartnerApproved(userId);
+
     // Pre-transaction idempotency check (fast path, no lock)
     const existing = await rewardRedemptionRepository.findByUserAndIdempotencyKey(
       userId,

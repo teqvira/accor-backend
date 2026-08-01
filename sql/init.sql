@@ -14,3 +14,5 @@
 \i sql/migrations/014_activity_feed_indexes.sql
 \i sql/migrations/015_reward_catalog_status.sql
 \i sql/migrations/016_reward_redemption_status.sql
+\i sql/migrations/017_campaigns.sql
+\i sql/migrations/018_partner_approval_status.sql

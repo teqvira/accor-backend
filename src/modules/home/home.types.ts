@@ -9,6 +9,8 @@ export interface HomeUserSummary {
   userType?: UserType;
   profileCompleted: boolean;
   isVerified: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  canAccessApp: boolean;
 }
 
 export interface HomeBalances {

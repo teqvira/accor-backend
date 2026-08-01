@@ -79,6 +79,9 @@ function sanitizeUser(user: IUser) {
     role: user.role,
     isActive: user.isActive,
     isVerified: user.isVerified,
+    approvalStatus: user.approvalStatus,
+    canAccessApp:
+      user.role !== UserRole.USER || user.approvalStatus === 'approved',
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
     avatarUrl: user.avatarUrl,
@@ -317,6 +320,7 @@ export class AuthService {
           mobileNumber,
           role: UserRole.USER,
           name: `User ${mobileNumber.slice(-4)}`,
+          approvalStatus: 'pending',
         });
         user = (await userRepository.findByMobile(mobileNumber)) ?? created;
       } catch (err: unknown) {

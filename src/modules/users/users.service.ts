@@ -40,6 +40,9 @@ function sanitizeUser(user: IUser) {
     role: user.role,
     isActive: user.isActive,
     isVerified: user.isVerified,
+    approvalStatus: user.approvalStatus,
+    canAccessApp:
+      user.role !== UserRole.USER || user.approvalStatus === 'approved',
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
     avatarUrl: user.avatarUrl,

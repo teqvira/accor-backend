@@ -73,7 +73,8 @@ export const userDocumentRepository = {
   upsertByUserAndType: async (data: {
     userId: string;
     documentType: UserDocumentType;
-    documentFront: string;
+    documentFront?: string | null;
+    documentNumber?: string | null;
     status?: UserDocumentStatus;
   }): Promise<IUserDocument> => {
     const existing = await userDocumentRepository.findByUserAndType(
@@ -84,24 +85,31 @@ export const userDocumentRepository = {
     if (existing) {
       const result = await pool.query<UserDocumentRow>(
         `UPDATE user_documents
-         SET document_front = $2,
-             status = $3
+         SET document_front = COALESCE($2, document_front),
+             document_number = COALESCE($3, document_number),
+             status = $4
          WHERE id = $1
          RETURNING ${DOC_COLUMNS}`,
-        [existing._id, data.documentFront, data.status ?? 'pending']
+        [
+          existing._id,
+          data.documentFront ?? null,
+          data.documentNumber ?? null,
+          data.status ?? existing.status,
+        ]
       );
       return mapDocumentRow(result.rows[0]);
     }
 
     const result = await pool.query<UserDocumentRow>(
       `INSERT INTO user_documents
-         (user_id, document_type, document_front, status)
-       VALUES ($1, $2, $3, $4)
+         (user_id, document_type, document_front, document_number, status)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING ${DOC_COLUMNS}`,
       [
         data.userId,
         data.documentType,
-        data.documentFront,
+        data.documentFront ?? null,
+        data.documentNumber ?? null,
         data.status ?? 'pending',
       ]
     );

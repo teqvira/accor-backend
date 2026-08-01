@@ -1,30 +1,34 @@
 import { PoolClient } from 'pg';
 import pool from '../../../database/connection';
 import {
+  ApprovalStatus,
   CreateUserData,
   IUser,
   mapUserRow,
   UpdateUserData,
   UserRole,
+  UserType,
 } from '../user.types';
 
 type Queryable = Pick<PoolClient, 'query'>;
 
 const USER_PUBLIC_COLUMNS = `
   id, name, email, mobile_number, wallet_balance, reward_points,
-  role, is_active, is_verified,
+  role, is_active, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   created_at, updated_at
 `;
 
 const USER_COLUMNS_WITH_PASSWORD = `
   id, name, email, mobile_number, password_hash, wallet_balance, reward_points,
-  role, is_active, is_verified,
+  role, is_active, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   created_at, updated_at
 `;
 
-function mapOptionalRow(row: Parameters<typeof mapUserRow>[0] | undefined): IUser | null {
+function mapOptionalRow(
+  row: Parameters<typeof mapUserRow>[0] | undefined
+): IUser | null {
   return row ? mapUserRow(row) : null;
 }
 
@@ -32,13 +36,64 @@ type UserRow = Parameters<typeof mapUserRow>[0] & {
   password_hash?: string | null;
 };
 
+export interface PartnerListRow extends UserRow {
+  qr_scan_count?: string | number;
+  rewards_earned?: string | number;
+  cash_redeemed?: string | number;
+  aadhaar_url?: string | null;
+  pan_url?: string | null;
+}
+
+export interface PartnerListItem extends IUser {
+  qrScanCount: number;
+  rewardsEarned: number;
+  cashRedeemed: number;
+  documents: {
+    aadhaarUrl: string | null;
+    panUrl: string | null;
+  };
+}
+
+function mapPartnerRow(row: PartnerListRow): PartnerListItem {
+  return {
+    ...mapUserRow(row),
+    qrScanCount: Number(row.qr_scan_count ?? 0),
+    rewardsEarned: Number(row.rewards_earned ?? 0),
+    cashRedeemed: Number(row.cash_redeemed ?? 0),
+    documents: {
+      aadhaarUrl: row.aadhaar_url ?? null,
+      panUrl: row.pan_url ?? null,
+    },
+  };
+}
+
+const PARTNER_SELECT = `
+  u.id, u.name, u.email, u.mobile_number, u.wallet_balance, u.reward_points,
+  u.role, u.is_active, u.is_verified, u.approval_status,
+  u.avatar_url, u.date_of_birth, u.city, u.state, u.user_type, u.profile_completed,
+  u.created_at, u.updated_at,
+  COUNT(DISTINCT rt.id)::text AS qr_scan_count,
+  COALESCE(SUM(rt.wallet_amount), 0)::text AS rewards_earned,
+  COALESCE((
+    SELECT SUM(w.amount) FROM withdrawals w
+    WHERE w.user_id = u.id AND w.status = 'success'
+  ), 0)::text AS cash_redeemed,
+  (
+    SELECT ud.document_front FROM user_documents ud
+    WHERE ud.user_id = u.id AND ud.document_type = 'aadhaar'
+    ORDER BY ud.created_at DESC LIMIT 1
+  ) AS aadhaar_url,
+  (
+    SELECT ud.document_front FROM user_documents ud
+    WHERE ud.user_id = u.id AND ud.document_type = 'pan'
+    ORDER BY ud.created_at DESC LIMIT 1
+  ) AS pan_url
+`;
+
 export const userRepository = {
   findById: async (
     id: string,
-    options?: {
-      includePassword?: boolean;
-      client?: Queryable;
-    }
+    options?: { includePassword?: boolean; client?: Queryable }
   ): Promise<IUser | null> => {
     const db = options?.client ?? pool;
     const columns = options?.includePassword
@@ -82,8 +137,9 @@ export const userRepository = {
   create: async (data: CreateUserData): Promise<IUser> => {
     const result = await pool.query<UserRow>(
       `INSERT INTO users
-         (name, email, mobile_number, password_hash, role, is_verified)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (name, email, mobile_number, password_hash, role, is_verified,
+          approval_status, city, state, user_type, profile_completed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING ${USER_PUBLIC_COLUMNS}`,
       [
         data.name ?? null,
@@ -92,6 +148,11 @@ export const userRepository = {
         data.password ?? null,
         data.role ?? UserRole.USER,
         data.isVerified ?? false,
+        data.approvalStatus ?? 'pending',
+        data.city ?? null,
+        data.state ?? null,
+        data.userType ?? null,
+        data.profileCompleted ?? false,
       ]
     );
     return mapUserRow(result.rows[0]);
@@ -129,6 +190,10 @@ export const userRepository = {
     if (data.isVerified !== undefined) {
       sets.push(`is_verified = $${paramIndex++}`);
       values.push(data.isVerified);
+    }
+    if (data.approvalStatus !== undefined) {
+      sets.push(`approval_status = $${paramIndex++}`);
+      values.push(data.approvalStatus);
     }
     if (data.avatarUrl !== undefined) {
       sets.push(`avatar_url = $${paramIndex++}`);
@@ -245,6 +310,101 @@ export const userRepository = {
     };
   },
 
+  findPartners: async (
+    page = 1,
+    limit = 20,
+    filters: {
+      userType?: UserType;
+      approvalStatus?: ApprovalStatus;
+      search?: string;
+    } = {}
+  ): Promise<{ items: PartnerListItem[]; total: number }> => {
+    const conditions: string[] = [`u.role = 'user'`];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (filters.userType) {
+      conditions.push(`u.user_type = $${i++}`);
+      values.push(filters.userType);
+    }
+    if (filters.approvalStatus) {
+      conditions.push(`u.approval_status = $${i++}`);
+      values.push(filters.approvalStatus);
+    }
+    if (filters.search) {
+      conditions.push(
+        `(u.name ILIKE $${i} OR u.email ILIKE $${i} OR u.mobile_number ILIKE $${i} OR u.city ILIKE $${i})`
+      );
+      values.push(`%${filters.search}%`);
+      i++;
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const offset = (page - 1) * limit;
+
+    const [itemsResult, countResult] = await Promise.all([
+      pool.query<PartnerListRow>(
+        `SELECT ${PARTNER_SELECT}
+         FROM users u
+         LEFT JOIN redemption_transactions rt ON rt.user_id = u.id
+         ${where}
+         GROUP BY u.id
+         ORDER BY u.created_at DESC
+         LIMIT $${i++} OFFSET $${i}`,
+        [...values, limit, offset]
+      ),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users u ${where}`,
+        values
+      ),
+    ]);
+
+    return {
+      items: itemsResult.rows.map(mapPartnerRow),
+      total: Number(countResult.rows[0]?.count ?? 0),
+    };
+  },
+
+  findPartnerById: async (id: string): Promise<PartnerListItem | null> => {
+    const result = await pool.query<PartnerListRow>(
+      `SELECT ${PARTNER_SELECT}
+       FROM users u
+       LEFT JOIN redemption_transactions rt ON rt.user_id = u.id
+       WHERE u.id = $1 AND u.role = 'user'
+       GROUP BY u.id`,
+      [id]
+    );
+    return result.rows[0] ? mapPartnerRow(result.rows[0]) : null;
+  },
+
+  getPartnerStats: async (): Promise<{
+    totalPartners: number;
+    dealers: number;
+    mechanics: number;
+    pendingApprovals: number;
+  }> => {
+    const result = await pool.query<{
+      total: string;
+      dealers: string;
+      mechanics: string;
+      pending: string;
+    }>(`
+      SELECT
+        COUNT(*) FILTER (WHERE role = 'user')::text AS total,
+        COUNT(*) FILTER (WHERE role = 'user' AND user_type = 'dealer')::text AS dealers,
+        COUNT(*) FILTER (WHERE role = 'user' AND user_type = 'mechanic')::text AS mechanics,
+        COUNT(*) FILTER (WHERE role = 'user' AND approval_status = 'pending')::text AS pending
+      FROM users
+    `);
+    const row = result.rows[0];
+    return {
+      totalPartners: Number(row.total),
+      dealers: Number(row.dealers),
+      mechanics: Number(row.mechanics),
+      pendingApprovals: Number(row.pending),
+    };
+  },
+
   countAdmins: async (): Promise<number> => {
     const result = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users
@@ -262,7 +422,6 @@ export const userRepository = {
     return Number(result.rows[0]?.count ?? 0);
   },
 
-  /** Lock user row FOR UPDATE inside an existing transaction. */
   findByIdForUpdate: async (
     id: string,
     client: Queryable

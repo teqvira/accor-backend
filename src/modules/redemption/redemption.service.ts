@@ -5,6 +5,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { campaignsService } from '../campaigns/campaigns.service';
+import { assertMechanicForQr } from '../partners/partners.service';
 import { productsService } from '../products/products.service';
 import { qrBatchRepository } from '../qr/repositories/qr-batch.repository';
 import { qrBatchService } from '../qr/services/qr-batch.service';
@@ -85,6 +86,8 @@ export class RedemptionService {
   }
 
   async redeem(userId: string, code: string) {
+    await assertMechanicForQr(userId);
+
     return withTransaction(async (client) => {
       const qrCode = await qrCodeRepository.findByCode(code, client);
       if (!qrCode) {

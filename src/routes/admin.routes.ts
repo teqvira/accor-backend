@@ -9,10 +9,12 @@ import { qrRoutes } from '../modules/qr/index';
 import { dashboardRoutes } from '../modules/dashboard/index';
 import { transactionsRoutes } from '../modules/transactions/index';
 import { campaignsRoutes } from '../modules/campaigns/index';
+import { partnersAdminRoutes } from '../modules/partners/index';
 
 export function registerAdminRoutes(app: Express): void {
   app.use('/api/auth', authAdminRoutes);
   app.use('/api/users', usersAdminRoutes);
+  app.use('/api/partners', partnersAdminRoutes);
   app.use('/api/wallet', walletAdminRoutes);
   app.use('/api/rewards', rewardsAdminRoutes);
   app.use('/api/upload', uploadAdminRoutes);

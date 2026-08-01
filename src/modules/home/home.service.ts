@@ -30,6 +30,8 @@ export class HomeService {
         userType: user.userType,
         profileCompleted: user.profileCompleted,
         isVerified: user.isVerified,
+        approvalStatus: user.approvalStatus,
+        canAccessApp: user.approvalStatus === 'approved',
       },
       balances: {
         walletBalance: user.walletBalance,

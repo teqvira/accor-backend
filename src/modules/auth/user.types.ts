@@ -5,6 +5,7 @@ export enum UserRole {
 }
 
 export type UserType = 'mechanic' | 'dealer';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface IUser {
   _id: string;
@@ -17,6 +18,7 @@ export interface IUser {
   role: UserRole;
   isActive: boolean;
   isVerified: boolean;
+  approvalStatus: ApprovalStatus;
   avatarUrl?: string;
   dateOfBirth?: Date;
   city?: string;
@@ -38,6 +40,7 @@ interface UserRow {
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
+  approval_status?: string | null;
   avatar_url?: string | null;
   date_of_birth?: Date | string | null;
   city?: string | null;
@@ -60,6 +63,7 @@ export function mapUserRow(row: UserRow): IUser {
     role: row.role,
     isActive: row.is_active,
     isVerified: row.is_verified,
+    approvalStatus: (row.approval_status as ApprovalStatus) ?? 'pending',
     avatarUrl: row.avatar_url ?? undefined,
     dateOfBirth: row.date_of_birth ? new Date(row.date_of_birth) : undefined,
     city: row.city ?? undefined,
@@ -78,6 +82,11 @@ export interface CreateUserData {
   password?: string;
   role?: UserRole;
   isVerified?: boolean;
+  approvalStatus?: ApprovalStatus;
+  city?: string;
+  state?: string;
+  userType?: UserType;
+  profileCompleted?: boolean;
 }
 
 export interface UpdateUserData {
@@ -88,6 +97,7 @@ export interface UpdateUserData {
   role?: UserRole;
   isActive?: boolean;
   isVerified?: boolean;
+  approvalStatus?: ApprovalStatus;
   avatarUrl?: string | null;
   dateOfBirth?: string | null;
   city?: string | null;

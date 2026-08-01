@@ -7,6 +7,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
+import { assertPartnerApproved } from '../partners/partners.service';
 import { walletService } from '../wallet/wallet.service';
 import { PayoutMethod, WithdrawalStatus } from './withdrawal.constants';
 import { payoutProfileRepository } from './repositories/payout-profile.repository';
@@ -128,6 +129,8 @@ export class WithdrawalService {
   }
 
   async requestWithdrawal(userId: string, input: CreateWithdrawalInput) {
+    await assertPartnerApproved(userId);
+
     if (input.amount < env.MIN_WITHDRAWAL_AMOUNT) {
       throw new BadRequestError(
         `Minimum withdrawal amount is ₹${env.MIN_WITHDRAWAL_AMOUNT}`,
