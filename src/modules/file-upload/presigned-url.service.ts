@@ -3,16 +3,20 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../../config/env';
 import { BadRequestError } from '../../shared/utils/errors';
 import s3Client from '../../infrastructure/s3/s3.client';
+import { buildS3ObjectUrl } from '../../infrastructure/s3/s3.object-url';
 import {
   ALLOWED_DOCUMENT_TYPES,
   ALLOWED_IMAGE_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
   MAX_IMAGE_SIZE_BYTES,
+  PartnerDocumentPurpose,
   PRESIGNED_URL_EXPIRES_SECONDS,
   ProfileUploadPurpose,
 } from './file-upload.constants';
-import { buildS3ObjectUrl } from '../../infrastructure/s3/s3.object-url';
-import { buildProductImageKey, buildUploadImageKey } from './product-image-key';
+import {
+  buildPartnerDocumentKey,
+  buildUploadImageKey,
+} from './product-image-key';
 import { buildProfileUploadKey } from './profile-upload-key';
 
 export interface PresignedUploadInput {
@@ -25,6 +29,12 @@ export interface ProfilePresignedUploadInput {
   fileName: string;
   contentType: string;
   purpose: ProfileUploadPurpose;
+}
+
+export interface PartnerDocumentPresignedInput {
+  fileName: string;
+  contentType: string;
+  purpose: PartnerDocumentPurpose;
 }
 
 export interface PresignedUploadResult {
@@ -104,6 +114,47 @@ export class PresignedUrlService {
       purpose: input.purpose,
       expiresIn: PRESIGNED_URL_EXPIRES_SECONDS,
       maxSizeBytes: isAvatar ? MAX_IMAGE_SIZE_BYTES : MAX_DOCUMENT_SIZE_BYTES,
+    };
+  }
+
+  /** Admin upload Aadhaar/PAN before partner exists (no partner id needed). */
+  async createPartnerDocumentUploadUrl(
+    input: PartnerDocumentPresignedInput
+  ): Promise<
+    PresignedUploadResult & {
+      purpose: PartnerDocumentPurpose;
+      fileUrl: string;
+    }
+  > {
+    if (!(ALLOWED_DOCUMENT_TYPES as readonly string[]).includes(input.contentType)) {
+      throw new BadRequestError(
+        'Document must be JPEG, PNG, WebP, GIF, or PDF',
+        `createPartnerDocumentUploadUrl: unsupported contentType=${input.contentType}`
+      );
+    }
+
+    const key = buildPartnerDocumentKey(input.purpose, input.fileName);
+    const command = new PutObjectCommand({
+      Bucket: env.AWS_S3_BUCKET_NAME,
+      Key: key,
+      ContentType: input.contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: PRESIGNED_URL_EXPIRES_SECONDS,
+      signableHeaders: new Set(['content-type']),
+    });
+
+    const fileUrl = buildS3ObjectUrl(key);
+
+    return {
+      uploadUrl,
+      imageUrl: fileUrl,
+      fileUrl,
+      key,
+      purpose: input.purpose,
+      expiresIn: PRESIGNED_URL_EXPIRES_SECONDS,
+      maxSizeBytes: MAX_DOCUMENT_SIZE_BYTES,
     };
   }
 }

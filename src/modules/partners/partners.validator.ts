@@ -20,6 +20,8 @@ export const createPartnerSchema = z.object({
   email: z.string().trim().email(),
   city: z.string().trim().min(2).max(100).optional(),
   state: z.string().trim().min(2).max(100).optional(),
+  aadhaarUrl: z.string().trim().url('Aadhaar document upload is required'),
+  panUrl: z.string().trim().url('PAN document upload is required'),
 });
 
 export const updatePartnerDocumentsSchema = z

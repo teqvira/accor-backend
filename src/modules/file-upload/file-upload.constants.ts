@@ -24,6 +24,10 @@ export const PRESIGNED_URL_EXPIRES_SECONDS = 15 * 60;
 
 export const PRODUCT_IMAGE_PREFIX = 'products/';
 export const PROFILE_UPLOAD_PREFIX = 'users/';
+export const PARTNER_DOCUMENT_PREFIX = 'partners/';
 
 export const PROFILE_UPLOAD_PURPOSES = ['avatar', 'aadhaar', 'pan'] as const;
 export type ProfileUploadPurpose = (typeof PROFILE_UPLOAD_PURPOSES)[number];
+
+export const PARTNER_DOCUMENT_PURPOSES = ['aadhaar', 'pan'] as const;
+export type PartnerDocumentPurpose = (typeof PARTNER_DOCUMENT_PURPOSES)[number];

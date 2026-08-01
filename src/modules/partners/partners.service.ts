@@ -8,6 +8,7 @@ import { isPgUniqueViolation } from '../../shared/utils/postgres';
 import { userRepository } from '../auth/repositories/user.repository';
 import { UserRole } from '../auth/user.types';
 import { isOwnProfileUploadUrl } from '../file-upload/profile-upload-key';
+import { isOwnBucketObjectUrl } from '../file-upload/product-image-key';
 import { presignedUrlService } from '../file-upload/presigned-url.service';
 import { userDocumentRepository } from '../users/user-document.repository';
 import {
@@ -53,8 +54,21 @@ export class PartnersService {
     return sanitizePartner(partner);
   }
 
-  /** Admin Add Partner → auto approved (dealer or mechanic). */
+  /** Admin Add Partner → auto approved (dealer or mechanic) + docs at create. */
   async create(input: CreatePartnerInput) {
+    if (!isOwnBucketObjectUrl(input.aadhaarUrl)) {
+      throw new BadRequestError(
+        'Aadhaar must be an uploaded document URL',
+        'createPartner: invalid aadhaarUrl'
+      );
+    }
+    if (!isOwnBucketObjectUrl(input.panUrl)) {
+      throw new BadRequestError(
+        'PAN must be an uploaded document URL',
+        'createPartner: invalid panUrl'
+      );
+    }
+
     try {
       const created = await userRepository.create({
         name: input.name.trim(),
@@ -69,9 +83,19 @@ export class PartnersService {
         profileCompleted: true,
       });
 
-      // Upload Aadhaar/PAN after create (same as mobile):
-      // POST /api/partners/:id/documents/presigned-url → PUT S3
-      // → PATCH /api/partners/:id/documents
+      await userDocumentRepository.upsertByUserAndType({
+        userId: created._id,
+        documentType: 'aadhaar',
+        documentFront: input.aadhaarUrl,
+        status: 'approved',
+      });
+      await userDocumentRepository.upsertByUserAndType({
+        userId: created._id,
+        documentType: 'pan',
+        documentFront: input.panUrl,
+        status: 'approved',
+      });
+
       return this.getById(created._id);
     } catch (err: unknown) {
       if (isPgUniqueViolation(err)) {

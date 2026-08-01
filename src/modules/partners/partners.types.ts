@@ -14,6 +14,8 @@ export interface CreatePartnerInput {
   email: string;
   city?: string;
   state?: string;
+  aadhaarUrl: string;
+  panUrl: string;
 }
 
 export interface UpdatePartnerDocumentsInput {
