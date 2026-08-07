@@ -6,6 +6,13 @@ export type NotificationType =
   | 'coupon_expiry'
   | 'admin_broadcast';
 
+/** Admin UI notification types (Create / list filter). */
+export type NotificationBroadcastType =
+  | 'reminder'
+  | 'campaign'
+  | 'info'
+  | 'alert';
+
 export type NotificationAudience = 'admin' | 'user' | 'all_users';
 
 export type NotificationPushStatus =
@@ -16,9 +23,11 @@ export type NotificationPushStatus =
 
 export interface INotification {
   _id: string;
+  code?: string;
   title: string;
   body: string;
   type: NotificationType;
+  broadcastType?: NotificationBroadcastType;
   audience: NotificationAudience;
   data: Record<string, unknown>;
   referenceType?: string;
@@ -51,6 +60,8 @@ export interface CreateNotificationInput {
   body: string;
   type: NotificationType;
   audience: NotificationAudience;
+  broadcastType?: NotificationBroadcastType;
+  code?: string;
   data?: Record<string, unknown>;
   referenceType?: string;
   referenceId?: string;
@@ -61,8 +72,20 @@ export interface CreateNotificationInput {
 
 export interface AdminCreateBroadcastInput {
   title: string;
-  body: string;
+  /** Preferred field from admin UI. */
+  description?: string;
+  /** Alias for description (API docs). */
+  body?: string;
+  /** Admin UI type: reminder | campaign | info | alert */
+  type: NotificationBroadcastType;
   data?: Record<string, unknown>;
-  /** Optional: target specific mobile users. Omit = all active partners (role=user). */
+  /** Optional: target specific mobile users. Omit = all active partners. */
   userIds?: string[];
+}
+
+export interface AdminBroadcastListFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  type?: NotificationBroadcastType;
 }

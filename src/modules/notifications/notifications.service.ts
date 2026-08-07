@@ -1,6 +1,8 @@
 import { sendFcmToTokens } from '../../infrastructure/fcm/fcm.client';
-import { NotFoundError } from '../../shared/utils/errors';
+import { BadRequestError, NotFoundError } from '../../shared/utils/errors';
+import { NOTIFICATION_BROADCAST_TYPES } from './notifications.constants';
 import {
+  AdminBroadcastListFilters,
   AdminCreateBroadcastInput,
   CreateNotificationInput,
   INotification,
@@ -11,16 +13,44 @@ import { notificationRepository } from './notifications.repository';
 function sanitizeInboxItem(item: INotificationInboxItem) {
   return {
     id: item._id,
+    code: item.code ?? null,
     recipientId: item.recipientId,
     title: item.title,
     body: item.body,
+    description: item.body,
     type: item.type,
+    broadcastType: item.broadcastType ?? null,
     audience: item.audience,
     data: item.data,
     referenceType: item.referenceType ?? null,
     referenceId: item.referenceId ?? null,
     isRead: item.isRead,
     readAt: item.readAt ?? null,
+    createdAt: item.createdAt,
+  };
+}
+
+function sanitizeBroadcastItem(item: INotification) {
+  return {
+    id: item._id,
+    notificationId: item.code ?? item._id,
+    code: item.code ?? null,
+    title: item.title,
+    description: item.body,
+    body: item.body,
+    type: item.broadcastType ?? null,
+    typeLabel:
+      item.broadcastType === 'reminder'
+        ? 'Reminder'
+        : item.broadcastType === 'campaign'
+          ? 'Campaign'
+          : item.broadcastType === 'info'
+            ? 'Info'
+            : item.broadcastType === 'alert'
+              ? 'Alert'
+              : null,
+    audience: item.audience,
+    data: item.data,
     createdAt: item.createdAt,
   };
 }
@@ -45,6 +75,8 @@ export class NotificationsService {
       body: input.body,
       type: input.type,
       audience: input.audience,
+      broadcastType: input.broadcastType,
+      code: input.code,
       data: input.data,
       referenceType: input.referenceType,
       referenceId: input.referenceId,
@@ -278,21 +310,37 @@ export class NotificationsService {
 
   // ---- Admin → Mobile (explicit create only) ----
 
+  getBroadcastTypes() {
+    return { types: [...NOTIFICATION_BROADCAST_TYPES] };
+  }
+
   async createAdminBroadcast(
     adminUserId: string,
     input: AdminCreateBroadcastInput
   ) {
+    const description = (input.description ?? input.body ?? '').trim();
+    if (!description) {
+      throw new BadRequestError(
+        'Description is required',
+        'createAdminBroadcast: missing description/body'
+      );
+    }
+
+    const code = await notificationRepository.nextBroadcastCode();
     const hasTargets = input.userIds && input.userIds.length > 0;
     const notification = await this.createAndPush({
       title: input.title.trim(),
-      body: input.body.trim(),
+      body: description,
       type: 'admin_broadcast',
+      broadcastType: input.type,
+      code,
       audience: hasTargets ? 'user' : 'all_users',
       recipientUserIds: hasTargets ? input.userIds : undefined,
       createdBy: adminUserId,
       data: {
         ...(input.data ?? {}),
         source: 'admin',
+        broadcastType: input.type,
       },
     });
 
@@ -303,14 +351,25 @@ export class NotificationsService {
       );
     }
 
+    return sanitizeBroadcastItem(notification);
+  }
+
+  async listAdminBroadcasts(filters: AdminBroadcastListFilters = {}) {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 20;
+    const { items, total } = await notificationRepository.listAdminBroadcasts({
+      page,
+      limit,
+      search: filters.search,
+      type: filters.type,
+    });
+
     return {
-      id: notification._id,
-      title: notification.title,
-      body: notification.body,
-      type: notification.type,
-      audience: notification.audience,
-      data: notification.data,
-      createdAt: notification.createdAt,
+      items: items.map(sanitizeBroadcastItem),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
     };
   }
 

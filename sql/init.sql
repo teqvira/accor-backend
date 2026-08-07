@@ -17,3 +17,4 @@
 \i sql/migrations/017_campaigns.sql
 \i sql/migrations/018_partner_approval_status.sql
 \i sql/migrations/019_notifications.sql
+\i sql/migrations/020_notification_broadcast_fields.sql

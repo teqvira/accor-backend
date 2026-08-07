@@ -6,27 +6,28 @@ import { adminOnly } from '../auth/guards';
 import { notificationsAdminController } from './notifications.controller';
 import {
   createAdminNotificationSchema,
+  listAdminBroadcastsQuerySchema,
   listNotificationsQuerySchema,
 } from './notifications.validator';
 
 const router = Router();
 
-/** Admin creates a notification → pushed only to mobile (partner) users. */
-router.post(
-  '/',
+/** Static types for Create Notification dropdown */
+router.get(
+  '/types',
   ...adminOnly,
-  validate(createAdminNotificationSchema),
   asyncHandler<AuthRequest>((req, res) =>
-    notificationsAdminController.create(req, res)
+    notificationsAdminController.getTypes(req, res)
   )
 );
 
+/** Personal inbox (system alerts to admin) */
 router.get(
-  '/',
+  '/inbox',
   ...adminOnly,
   validate(listNotificationsQuerySchema, 'query'),
   asyncHandler<AuthRequest>((req, res) =>
-    notificationsAdminController.list(req, res)
+    notificationsAdminController.listInbox(req, res)
   )
 );
 
@@ -51,6 +52,29 @@ router.post(
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
     notificationsAdminController.markRead(req, res)
+  )
+);
+
+/**
+ * Admin management list (screenshot table).
+ * Supports search + type filter (reminder | campaign | info | alert).
+ */
+router.get(
+  '/',
+  ...adminOnly,
+  validate(listAdminBroadcastsQuerySchema, 'query'),
+  asyncHandler<AuthRequest>((req, res) =>
+    notificationsAdminController.listBroadcasts(req, res)
+  )
+);
+
+/** Create notification → push to mobile users */
+router.post(
+  '/',
+  ...adminOnly,
+  validate(createAdminNotificationSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    notificationsAdminController.create(req, res)
   )
 );
 

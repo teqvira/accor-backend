@@ -4,15 +4,18 @@ import {
   INotificationInboxItem,
   INotificationRecipient,
   NotificationAudience,
+  NotificationBroadcastType,
   NotificationPushStatus,
   NotificationType,
 } from './notifications.types';
 
 interface NotificationRow {
   id: string;
+  code: string | null;
   title: string;
   body: string;
   type: NotificationType;
+  broadcast_type: NotificationBroadcastType | null;
   audience: NotificationAudience;
   data: Record<string, unknown> | string | null;
   reference_type: string | null;
@@ -57,9 +60,11 @@ function parseData(
 function mapNotification(row: NotificationRow): INotification {
   return {
     _id: row.id,
+    code: row.code ?? undefined,
     title: row.title,
     body: row.body,
     type: row.type,
+    broadcastType: row.broadcast_type ?? undefined,
     audience: row.audience,
     data: parseData(row.data),
     referenceType: row.reference_type ?? undefined,
@@ -94,16 +99,26 @@ function mapInbox(row: InboxRow): INotificationInboxItem {
 }
 
 const NOTIFICATION_COLUMNS = `
-  id, title, body, type, audience, data, reference_type, reference_id,
-  created_by, created_at
+  id, code, title, body, type, broadcast_type, audience, data,
+  reference_type, reference_id, created_by, created_at
 `;
 
 export const notificationRepository = {
+  nextBroadcastCode: async (): Promise<string> => {
+    const result = await pool.query<{ n: string }>(
+      `SELECT nextval('notification_code_seq')::text AS n`
+    );
+    const num = Number(result.rows[0]?.n ?? 1);
+    return `NFT-${String(num).padStart(4, '0')}`;
+  },
+
   create: async (input: {
     title: string;
     body: string;
     type: NotificationType;
     audience: NotificationAudience;
+    broadcastType?: NotificationBroadcastType;
+    code?: string;
     data?: Record<string, unknown>;
     referenceType?: string;
     referenceId?: string;
@@ -112,15 +127,18 @@ export const notificationRepository = {
     try {
       const result = await pool.query<NotificationRow>(
         `INSERT INTO notifications (
-           title, body, type, audience, data, reference_type, reference_id, created_by
+           title, body, type, audience, broadcast_type, code,
+           data, reference_type, reference_id, created_by
          )
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
          RETURNING ${NOTIFICATION_COLUMNS}`,
         [
           input.title,
           input.body,
           input.type,
           input.audience,
+          input.broadcastType ?? null,
+          input.code ?? null,
           JSON.stringify(input.data ?? {}),
           input.referenceType ?? null,
           input.referenceId ?? null,
@@ -140,6 +158,51 @@ export const notificationRepository = {
       }
       throw err;
     }
+  },
+
+  listAdminBroadcasts: async (filters: {
+    page: number;
+    limit: number;
+    search?: string;
+    type?: NotificationBroadcastType;
+  }): Promise<{ items: INotification[]; total: number }> => {
+    const conditions = [`type = 'admin_broadcast'`];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (filters.type) {
+      conditions.push(`broadcast_type = $${i++}`);
+      values.push(filters.type);
+    }
+
+    if (filters.search?.trim()) {
+      conditions.push(
+        `(title ILIKE $${i} OR body ILIKE $${i} OR COALESCE(code, '') ILIKE $${i})`
+      );
+      values.push(`%${filters.search.trim()}%`);
+      i++;
+    }
+
+    const where = conditions.join(' AND ');
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM notifications WHERE ${where}`,
+      values
+    );
+
+    const offset = (filters.page - 1) * filters.limit;
+    const result = await pool.query<NotificationRow>(
+      `SELECT ${NOTIFICATION_COLUMNS}
+       FROM notifications
+       WHERE ${where}
+       ORDER BY created_at DESC
+       LIMIT $${i++} OFFSET $${i}`,
+      [...values, filters.limit, offset]
+    );
+
+    return {
+      items: result.rows.map(mapNotification),
+      total: Number(countResult.rows[0]?.count ?? 0),
+    };
   },
 
   addRecipients: async (
@@ -193,7 +256,7 @@ export const notificationRepository = {
     );
 
     const result = await pool.query<InboxRow>(
-      `SELECT n.id, n.title, n.body, n.type, n.audience, n.data,
+      `SELECT n.id, n.code, n.title, n.body, n.type, n.broadcast_type, n.audience, n.data,
               n.reference_type, n.reference_id, n.created_by, n.created_at,
               nr.id AS recipient_id, nr.is_read, nr.read_at, nr.push_status
        FROM notification_recipients nr

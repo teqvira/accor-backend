@@ -1,10 +1,34 @@
 import { Response } from 'express';
-import { getParam } from '../../shared/utils/params';
+import { getOptionalQueryParam, getParam } from '../../shared/utils/params';
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from '../auth/auth.types';
 import { notificationsService } from './notifications.service';
+import { NotificationBroadcastType } from './notifications.types';
 
 export class NotificationsAdminController {
+  async getTypes(_req: AuthRequest, res: Response): Promise<void> {
+    const result = notificationsService.getBroadcastTypes();
+    sendSuccess(res, 'Notification types fetched successfully', result);
+  }
+
+  /** Admin management table (Create Notification list). */
+  async listBroadcasts(req: AuthRequest, res: Response): Promise<void> {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const search = getOptionalQueryParam(req.query.search);
+    const type = getOptionalQueryParam(req.query.type) as
+      | NotificationBroadcastType
+      | undefined;
+
+    const result = await notificationsService.listAdminBroadcasts({
+      page,
+      limit,
+      search,
+      type,
+    });
+    sendSuccess(res, 'Notifications fetched successfully', result);
+  }
+
   async create(req: AuthRequest, res: Response): Promise<void> {
     const notification = await notificationsService.createAdminBroadcast(
       req.user!.sub,
@@ -13,7 +37,8 @@ export class NotificationsAdminController {
     sendSuccess(res, 'Notification sent to mobile users', { notification }, 201);
   }
 
-  async list(req: AuthRequest, res: Response): Promise<void> {
+  /** Personal inbox (partner_request, reward, wallet, expiry, etc.). */
+  async listInbox(req: AuthRequest, res: Response): Promise<void> {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const unreadOnly = Boolean(req.query.unreadOnly);
