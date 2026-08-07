@@ -73,15 +73,18 @@ async function streamPdfExport(
   const { cols, rows, gapX, gapY } = pdfGridForShape(shape);
   const perPage = cols * rows;
 
-  const doc = new PDFDocument({ autoFirstPage: false, size: 'LETTER' });
+  // White sheet: 12" × 18" (1200×1800 px @ 100 DPI) → PDF points @ 72 DPI
+  const pageW = 12 * 72; // 864
+  const pageH = 18 * 72; // 1296
+  // Bleed: 3mm ≈ 12px @ 100 DPI on every side
+  const bleed = (12 / 100) * 72; // 8.64 pt
+  const doc = new PDFDocument({ autoFirstPage: false, size: [pageW, pageH] });
   doc.pipe(res);
 
   const gridW = cols * labelW + (cols - 1) * gapX;
   const gridH = rows * labelH + (rows - 1) * gapY;
-  const pageW = 612;
-  const pageH = 792;
-  const marginX = Math.max(18, (pageW - gridW) / 2);
-  const marginY = Math.max(18, (pageH - gridH) / 2);
+  const marginX = Math.max(bleed, (pageW - gridW) / 2);
+  const marginY = Math.max(bleed, (pageH - gridH) / 2);
   const cellW = labelW + gapX;
   const cellH = labelH + gapY;
 
