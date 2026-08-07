@@ -1,9 +1,11 @@
 import { withTransaction } from '../../database/transactions';
+import { env } from '../../config/env';
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from '../../shared/utils/errors';
+import { sendOtpSms } from '../../infrastructure/sms/sms.client';
 import { campaignsService } from '../campaigns/campaigns.service';
 import { notificationsService } from '../notifications/index';
 import { assertMechanicForQr } from '../partners/partners.service';
@@ -14,7 +16,24 @@ import { qrCodeRepository } from '../qr/repositories/qr-code.repository';
 import { rewardsService } from '../rewards/rewards.service';
 import { redemptionTransactionRepository } from '../transactions/redemption-transaction.repository';
 import { userRepository } from '../auth/repositories/user.repository';
+import { otpVerificationRepository } from '../auth/repositories/otp-verification.repository';
+import { generateOtp, hashOtp, verifyOtpHash } from '../auth/otp.util';
 import { walletService } from '../wallet/wallet.service';
+
+const QR_REDEMPTION_OTP_PURPOSE = 'qr_redemption' as const;
+
+function resolveRedemptionOtp(): string {
+  // QA: when TEST_STATIC_OTP is configured, always use it for scan OTP (any mobile).
+  if (env.TEST_STATIC_OTP) {
+    return env.TEST_STATIC_OTP;
+  }
+  return generateOtp();
+}
+
+function maskMobile(mobileNumber: string): string {
+  if (mobileNumber.length < 4) return mobileNumber;
+  return `${mobileNumber.slice(0, 2)}******${mobileNumber.slice(-2)}`;
+}
 
 export class RedemptionService {
   async validateCode(code: string) {
@@ -52,10 +71,12 @@ export class RedemptionService {
       );
     }
 
-    // Check for active campaign multiplier
-    const activeCampaign = await campaignsService.getActiveMultiplierForBatch(batch._id);
+    const activeCampaign =
+      await campaignsService.getActiveMultiplierForBatch(batch._id);
     const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
-    const effectiveWalletAmount = Number((batch.walletAmount * multiplier).toFixed(2));
+    const effectiveWalletAmount = Number(
+      (batch.walletAmount * multiplier).toFixed(2)
+    );
     const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
 
     return {
@@ -85,6 +106,114 @@ export class RedemptionService {
         : null,
       redeemable: true,
     };
+  }
+
+  /** Validate QR is redeemable, then send OTP to the mechanic's mobile. */
+  async sendRedemptionOtp(userId: string, code: string) {
+    await assertMechanicForQr(userId);
+    await this.validateCode(code);
+
+    const user = await userRepository.findById(userId);
+    if (!user?.mobileNumber) {
+      throw new BadRequestError(
+        'Mobile number is required to verify this redemption',
+        `sendRedemptionOtp: missing mobile userId=${userId}`
+      );
+    }
+
+    const mobileNumber = user.mobileNumber;
+    const purpose = QR_REDEMPTION_OTP_PURPOSE;
+
+    if (!env.TEST_STATIC_OTP) {
+      const latest = await otpVerificationRepository.findLatest({
+        mobileNumber,
+        purpose,
+      });
+      if (latest) {
+        const elapsed = Date.now() - latest.createdAt.getTime();
+        const cooldown = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
+        if (elapsed < cooldown) {
+          const waitSeconds = Math.ceil((cooldown - elapsed) / 1000);
+          throw new BadRequestError(
+            `Please wait ${waitSeconds} seconds before requesting a new OTP`,
+            `sendRedemptionOtp: cooldown mobile=${mobileNumber}`
+          );
+        }
+      }
+    }
+
+    const otp = resolveRedemptionOtp();
+    await otpVerificationRepository.invalidateActive({
+      mobileNumber,
+      purpose,
+    });
+    await otpVerificationRepository.create({
+      mobileNumber,
+      otpHash: hashOtp(otp),
+      purpose,
+      expiresAt: new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000),
+    });
+
+    if (env.TEST_STATIC_OTP) {
+      console.log(
+        `[TEST OTP] qr_redemption static OTP for ${mobileNumber} code=${code}: ${otp} (SMS skipped)`
+      );
+    } else {
+      await sendOtpSms(mobileNumber, otp);
+    }
+
+    return {
+      mobileNumber: maskMobile(mobileNumber),
+      expiresIn: env.OTP_EXPIRES_MINUTES * 60,
+    };
+  }
+
+  /** Verify scan OTP, then redeem the QR (same result as redeem). */
+  async verifyRedemptionOtp(userId: string, code: string, otp: string) {
+    await assertMechanicForQr(userId);
+
+    const user = await userRepository.findById(userId);
+    if (!user?.mobileNumber) {
+      throw new BadRequestError(
+        'Mobile number is required to verify this redemption',
+        `verifyRedemptionOtp: missing mobile userId=${userId}`
+      );
+    }
+
+    const mobileNumber = user.mobileNumber;
+    const purpose = QR_REDEMPTION_OTP_PURPOSE;
+    const otpRecord = await otpVerificationRepository.findLatestActive({
+      mobileNumber,
+      purpose,
+    });
+
+    const staticOtpOk = Boolean(
+      env.TEST_STATIC_OTP && otp === env.TEST_STATIC_OTP
+    );
+
+    if (!otpRecord && !staticOtpOk) {
+      throw new BadRequestError(
+        'No OTP request found. Please request a new OTP',
+        `verifyRedemptionOtp: missing otp mobile=${mobileNumber}`
+      );
+    }
+
+    const otpValid =
+      staticOtpOk ||
+      (otpRecord ? verifyOtpHash(otp, otpRecord.otpHash) : false);
+
+    if (!otpValid) {
+      throw new BadRequestError(
+        'Invalid OTP. Please try again',
+        `verifyRedemptionOtp: bad otp mobile=${mobileNumber}`
+      );
+    }
+
+    if (otpRecord) {
+      await otpVerificationRepository.markVerified(otpRecord._id);
+    }
+
+    return this.redeem(userId, code);
   }
 
   async redeem(userId: string, code: string) {
@@ -122,9 +251,12 @@ export class RedemptionService {
         );
       }
 
-      const activeCampaign = await campaignsService.getActiveMultiplierForBatch(batch._id);
+      const activeCampaign =
+        await campaignsService.getActiveMultiplierForBatch(batch._id);
       const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
-      const effectiveWalletAmount = Number((batch.walletAmount * multiplier).toFixed(2));
+      const effectiveWalletAmount = Number(
+        (batch.walletAmount * multiplier).toFixed(2)
+      );
       const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
 
       const updatedQr = await qrCodeRepository.markRedeemedByCode(
@@ -217,4 +349,3 @@ export class RedemptionService {
 }
 
 export const redemptionService = new RedemptionService();
-

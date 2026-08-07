@@ -14,6 +14,23 @@ export class RedemptionController {
     const result = await redemptionService.redeem(req.user!.sub, req.body.code);
     sendSuccess(res, 'QR code redeemed successfully', result);
   }
+
+  async sendOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await redemptionService.sendRedemptionOtp(
+      req.user!.sub,
+      req.body.code
+    );
+    sendSuccess(res, 'OTP sent successfully', result);
+  }
+
+  async verifyOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await redemptionService.verifyRedemptionOtp(
+      req.user!.sub,
+      req.body.code,
+      req.body.otp
+    );
+    sendSuccess(res, 'QR code redeemed successfully', result);
+  }
 }
 
 export const redemptionController = new RedemptionController();
