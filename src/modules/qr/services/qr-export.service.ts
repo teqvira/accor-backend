@@ -89,7 +89,17 @@ async function streamPdfExport(
   const cellH = labelH + gapY;
 
   for (let i = 0; i < codes.length; i++) {
-    if (i % perPage === 0) doc.addPage();
+    if (i % perPage === 0) {
+      doc.addPage();
+      // Inset dark border so PDF viewers don't clip it at the page edge
+      const borderW = 3;
+      const inset = 6;
+      doc
+        .rect(inset, inset, pageW - inset * 2, pageH - inset * 2)
+        .lineWidth(borderW)
+        .strokeColor('#4A4A4A')
+        .stroke();
+    }
 
     const indexOnPage = i % perPage;
     const col = indexOnPage % cols;
