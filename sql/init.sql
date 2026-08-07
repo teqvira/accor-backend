@@ -16,3 +16,4 @@
 \i sql/migrations/016_reward_redemption_status.sql
 \i sql/migrations/017_campaigns.sql
 \i sql/migrations/018_partner_approval_status.sql
+\i sql/migrations/019_notifications.sql

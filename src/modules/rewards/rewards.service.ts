@@ -7,6 +7,7 @@ import {
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
 import { assertPartnerApproved } from '../partners/partners.service';
+import { notificationsService } from '../notifications/index';
 import { rewardCatalogRepository } from './reward-catalog.repository';
 import { rewardRedemptionRepository } from './reward-redemption.repository';
 import { rewardTransactionRepository } from './reward-transaction.repository';
@@ -233,7 +234,7 @@ export class RewardsService {
       return buildRedemptionResponse(existing);
     }
 
-    return withTransaction(async (client) => {
+    const result = await withTransaction(async (client) => {
       // Lock user row
       const user = await userRepository.findByIdForUpdate(userId, client);
       if (!user) {
@@ -254,7 +255,7 @@ export class RewardsService {
             `redeemReward: idempotencyKey=${idempotencyKey} used for rewardId=${existingAfterLock.rewardId}`
           );
         }
-        return buildRedemptionResponse(existingAfterLock);
+        return { response: buildRedemptionResponse(existingAfterLock), isNew: false as const };
       }
 
       // Lock reward row
@@ -313,8 +314,24 @@ export class RewardsService {
         'reward_redeem'
       );
 
-      return buildRedemptionResponse(redemption);
+      return {
+        response: buildRedemptionResponse(redemption),
+        isNew: true as const,
+        notify: {
+          userId,
+          redemptionId: redemption._id,
+          rewardName: reward.name,
+          pointsSpent: reward.pointsCost,
+          userName: user.name,
+        },
+      };
     });
+
+    if (result.isNew && result.notify) {
+      notificationsService.notifyRewardRequest(result.notify);
+    }
+
+    return result.response;
   }
 
   async getUserRewardsAdmin(userId: string) {

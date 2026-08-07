@@ -13,3 +13,8 @@ tmp/
 .DS_Store
 
 package-lock.json
+secrets/
+firebase-service-account.json
+*firebase-adminsdk*.json
+**/firebase-*.json
+!docs/**

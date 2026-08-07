@@ -10,6 +10,7 @@ import { dashboardRoutes } from '../modules/dashboard/index';
 import { transactionsRoutes } from '../modules/transactions/index';
 import { campaignsRoutes } from '../modules/campaigns/index';
 import { partnersAdminRoutes } from '../modules/partners/index';
+import { notificationsAdminRoutes } from '../modules/notifications/index';
 
 export function registerAdminRoutes(app: Express): void {
   app.use('/api/auth', authAdminRoutes);
@@ -23,5 +24,6 @@ export function registerAdminRoutes(app: Express): void {
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/transactions', transactionsRoutes);
   app.use('/api/campaigns', campaignsRoutes);
+  app.use('/api/notifications', notificationsAdminRoutes);
 }
 

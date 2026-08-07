@@ -7,6 +7,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
+import { notificationsService } from '../notifications/index';
 import { assertPartnerApproved } from '../partners/partners.service';
 import { walletService } from '../wallet/wallet.service';
 import { PayoutMethod, WithdrawalStatus } from './withdrawal.constants';
@@ -184,7 +185,7 @@ export class WithdrawalService {
         client
       );
 
-      await walletService.debitInSession(
+      const walletTx = await walletService.debitInSession(
         userId,
         input.amount,
         createdWithdrawal._id,
@@ -193,7 +194,16 @@ export class WithdrawalService {
         'withdrawal'
       );
 
-      return createdWithdrawal;
+      return { createdWithdrawal, walletTx, userName: user.name };
+    });
+
+    notificationsService.notifyWalletTransaction({
+      userId,
+      transactionId: withdrawal.walletTx._id,
+      amount: input.amount,
+      direction: 'debit',
+      remarks: `Wallet withdrawal ${referenceId}`,
+      userName: withdrawal.userName,
     });
 
     try {
@@ -206,7 +216,7 @@ export class WithdrawalService {
       );
 
       const updatedWithdrawal = await withdrawalRepository.updateProviderDetails(
-        withdrawal._id,
+        withdrawal.createdWithdrawal._id,
         {
           providerPayoutId: payout.providerPayoutId,
           status:
@@ -219,14 +229,14 @@ export class WithdrawalService {
       if (!updatedWithdrawal) {
         throw new NotFoundError(
           'Withdrawal not found',
-          `requestWithdrawal: withdrawalId=${withdrawal._id}`
+          `requestWithdrawal: withdrawalId=${withdrawal.createdWithdrawal._id}`
         );
       }
 
       return sanitizeWithdrawal(updatedWithdrawal);
     } catch (error) {
       await this.refundFailedWithdrawal(
-        withdrawal,
+        withdrawal.createdWithdrawal,
         error instanceof Error ? error.message : 'Payout initiation failed'
       );
       throw error;
@@ -234,14 +244,14 @@ export class WithdrawalService {
   }
 
   async refundFailedWithdrawal(withdrawal: IWithdrawal, reason: string) {
-    await withTransaction(async (client) => {
+    const refunded = await withTransaction(async (client) => {
       const current = await withdrawalRepository.findById(withdrawal._id, client);
       if (
         !current ||
         current.status === WithdrawalStatus.SUCCESS ||
         current.status === WithdrawalStatus.FAILED
       ) {
-        return;
+        return null;
       }
 
       await withdrawalRepository.updateFailure(
@@ -251,7 +261,7 @@ export class WithdrawalService {
         client
       );
 
-      await walletService.creditInSession(
+      const walletTx = await walletService.creditInSession(
         current.userId,
         current.amount,
         current._id,
@@ -259,7 +269,21 @@ export class WithdrawalService {
         client,
         'withdrawal'
       );
+
+      return { walletTx, userId: current.userId, amount: current.amount };
     });
+
+    if (refunded) {
+      const user = await userRepository.findById(refunded.userId);
+      notificationsService.notifyWalletTransaction({
+        userId: refunded.userId,
+        transactionId: refunded.walletTx._id,
+        amount: refunded.amount,
+        direction: 'credit',
+        remarks: `Withdrawal refund`,
+        userName: user?.name,
+      });
+    }
   }
 
   async handleRazorpayWebhook(payload: Record<string, unknown>, signature: string) {

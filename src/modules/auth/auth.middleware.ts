@@ -1,4 +1,5 @@
 import { NextFunction, Response } from 'express';
+import { syncDeviceToken } from '../../shared/middleware/device-token';
 import { getBearerToken } from '../../shared/utils/bearer-token';
 import {
   BadRequestError,
@@ -11,7 +12,7 @@ import { verifyAccessToken } from './jwt.util';
 
 export function authenticate(
   req: AuthRequest,
-  _res: Response,
+  res: Response,
   next: NextFunction
 ): void {
   const token = getBearerToken(req);
@@ -25,7 +26,8 @@ export function authenticate(
   }
   try {
     req.user = verifyAccessToken(token);
-    next();
+    // Keep FCM token fresh on every authenticated API call
+    syncDeviceToken(req, res, next);
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'unknown';
     return next(
@@ -39,7 +41,7 @@ export function authenticate(
 
 export function optionalAuthenticate(
   req: AuthRequest,
-  _res: Response,
+  res: Response,
   next: NextFunction
 ): void {
   const token = getBearerToken(req);
@@ -50,6 +52,8 @@ export function optionalAuthenticate(
 
   try {
     req.user = verifyAccessToken(token);
+    syncDeviceToken(req, res, next);
+    return;
   } catch {
     // Ignore invalid tokens on public OTP routes.
   }

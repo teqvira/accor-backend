@@ -2,12 +2,14 @@ import app from './app';
 import { env } from './config/env';
 import pool from './database/connection';
 import { bootstrapAdmin } from './modules/auth/index';
+import { startExpiryNotificationJob } from './modules/notifications/index';
 
 const startServer = async () => {
   try {
     await pool.query('SELECT 1');
     console.log('Database connected: accor_db');
     await bootstrapAdmin();
+    startExpiryNotificationJob();
     app.listen(env.PORT, () => {
       console.log(`Server running on port ${env.PORT}`);
       console.log(`Auth API: http://localhost:${env.PORT}/api/auth`);

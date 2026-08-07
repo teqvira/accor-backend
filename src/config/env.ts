@@ -53,6 +53,19 @@ const envSchema = z.object({
   CASHFREE_CLIENT_ID: z.string().optional(),
   CASHFREE_CLIENT_SECRET: z.string().optional(),
   CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+
+  /**
+   * Firebase Admin service account — paste the full JSON as a single-line string,
+   * or set FIREBASE_SERVICE_ACCOUNT_PATH to the downloaded key file.
+   * From Firebase Console → Project settings → Service accounts → Generate new private key.
+   */
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  FIREBASE_SERVICE_ACCOUNT_PATH: z.string().optional(),
+
+  /** How often to scan campaigns / coupon batches nearing end_date (ms). */
+  NOTIFICATION_EXPIRY_CHECK_MS: z.coerce.number().min(60_000).default(3_600_000),
+  /** Notify admins when end_date is within this many hours. */
+  NOTIFICATION_EXPIRY_WINDOW_HOURS: z.coerce.number().min(1).default(24),
 });
 
 const parsed = envSchema.safeParse(process.env);

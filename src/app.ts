@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { env } from './config/env';
+import { captureDeviceContext } from './shared/middleware/device-token';
 import { errorHandler } from './shared/middleware/error-handler';
 import { registerRoutes } from './routes';
 
@@ -19,12 +20,21 @@ app.use(
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Device-Token',
+      'X-Device-Platform',
+      'X-Device-Id',
+      'X-Device-Name',
+      'X-App-Version',
+    ],
   })
 );
 app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());
+app.use(captureDeviceContext);
 
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: 'Server is running' });

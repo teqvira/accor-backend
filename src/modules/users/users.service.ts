@@ -9,6 +9,7 @@ import { userRepository } from '../auth/repositories/user.repository';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { IUser, UserRole } from '../auth/user.types';
 import { isOwnProfileUploadUrl } from '../file-upload/profile-upload-key';
+import { notificationsService } from '../notifications/index';
 import { userDocumentRepository } from './user-document.repository';
 import {
   CompleteProfileInput,
@@ -189,6 +190,17 @@ export class UsersService {
       });
 
       const docs = await userDocumentRepository.findByUserId(userId);
+
+      // Mobile partner registration → notify admins
+      if (!existing.profileCompleted) {
+        notificationsService.notifyPartnerRequest({
+          userId: updated._id,
+          name: updated.name,
+          mobileNumber: updated.mobileNumber,
+          userType: updated.userType,
+        });
+      }
+
       return {
         user: sanitizeUser(updated),
         documents: sanitizeDocuments(docs),

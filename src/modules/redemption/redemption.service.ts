@@ -5,6 +5,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { campaignsService } from '../campaigns/campaigns.service';
+import { notificationsService } from '../notifications/index';
 import { assertMechanicForQr } from '../partners/partners.service';
 import { productsService } from '../products/products.service';
 import { qrBatchRepository } from '../qr/repositories/qr-batch.repository';
@@ -12,6 +13,7 @@ import { qrBatchService } from '../qr/services/qr-batch.service';
 import { qrCodeRepository } from '../qr/repositories/qr-code.repository';
 import { rewardsService } from '../rewards/rewards.service';
 import { redemptionTransactionRepository } from '../transactions/redemption-transaction.repository';
+import { userRepository } from '../auth/repositories/user.repository';
 import { walletService } from '../wallet/wallet.service';
 
 export class RedemptionService {
@@ -88,7 +90,7 @@ export class RedemptionService {
   async redeem(userId: string, code: string) {
     await assertMechanicForQr(userId);
 
-    return withTransaction(async (client) => {
+    const result = await withTransaction(async (client) => {
       const qrCode = await qrCodeRepository.findByCode(code, client);
       if (!qrCode) {
         throw new NotFoundError('QR code not found', `redeem: code=${code}`);
@@ -142,7 +144,7 @@ export class RedemptionService {
         ? `QR redemption: ${code} (${activeCampaign.campaignName} - ${multiplier}x)`
         : `QR redemption: ${code}`;
 
-      await walletService.creditInSession(
+      const walletTx = await walletService.creditInSession(
         updatedQr.redeemedBy!,
         effectiveWalletAmount,
         updatedQr._id,
@@ -176,24 +178,41 @@ export class RedemptionService {
       );
 
       return {
-        redemption: {
-          id: redemptionTx._id,
-          code,
-          batchName: batch.name,
-          productName: batch.product?.name,
-          walletAmount: effectiveWalletAmount,
-          rewardPoints: effectiveRewardPoints,
-          campaign: activeCampaign
-            ? {
-                id: activeCampaign.campaignId,
-                name: activeCampaign.campaignName,
-                multiplier,
-              }
-            : null,
-          redeemedAt: updatedQr.redeemedAt,
+        response: {
+          redemption: {
+            id: redemptionTx._id,
+            code,
+            batchName: batch.name,
+            productName: batch.product?.name,
+            walletAmount: effectiveWalletAmount,
+            rewardPoints: effectiveRewardPoints,
+            campaign: activeCampaign
+              ? {
+                  id: activeCampaign.campaignId,
+                  name: activeCampaign.campaignName,
+                  multiplier,
+                }
+              : null,
+            redeemedAt: updatedQr.redeemedAt,
+          },
         },
+        walletTxId: walletTx._id,
+        walletAmount: effectiveWalletAmount,
+        remarks: remarkText,
       };
     });
+
+    const user = await userRepository.findById(userId);
+    notificationsService.notifyWalletTransaction({
+      userId,
+      transactionId: result.walletTxId,
+      amount: result.walletAmount,
+      direction: 'credit',
+      remarks: result.remarks,
+      userName: user?.name,
+    });
+
+    return result.response;
   }
 }
 

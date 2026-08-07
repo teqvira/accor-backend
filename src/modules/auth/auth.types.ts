@@ -18,7 +18,17 @@ export interface JwtResetPayload {
   purpose: 'password-reset';
 }
 
+export interface DeviceContext {
+  deviceToken: string;
+  platform?: 'ios' | 'android' | 'web' | 'unknown';
+  deviceId?: string;
+  deviceName?: string;
+  appVersion?: string;
+}
+
 export interface AuthRequest extends Request {
   user?: JwtAccessPayload;
   bearerToken?: string;
+  /** FCM / device metadata from X-Device-* headers or body (see captureDeviceContext). */
+  deviceContext?: DeviceContext;
 }
