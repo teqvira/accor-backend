@@ -34,10 +34,10 @@ import {
 import { generateOtp, hashOtp, verifyOtpHash } from './otp.util';
 
 function isStaticTestMobile(mobileNumber: string): boolean {
-  return Boolean(
-    env.TEST_MOBILE_NUMBER &&
-      env.TEST_STATIC_OTP &&
-      env.TEST_MOBILE_NUMBER === mobileNumber
+  if (!env.TEST_STATIC_OTP) return false;
+  return (
+    env.TEST_MOBILE_NUMBER === mobileNumber ||
+    env.TEST_DEALER_MOBILE_NUMBER === mobileNumber
   );
 }
 
