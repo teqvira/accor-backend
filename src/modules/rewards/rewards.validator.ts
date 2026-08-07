@@ -44,7 +44,7 @@ export const adminRedemptionListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(REWARD_REDEMPTION_STATUSES).optional(),
-  rewardId: z.string().uuid().optional(),
+  rewardId: z.guid().optional(),
   search: z.string().trim().optional(),
 });
 
@@ -54,8 +54,10 @@ export const updateRedemptionStatusSchema = z.object({
 });
 
 export const redeemRewardSchema = z.object({
-  rewardId: z.string().uuid(),
-  idempotencyKey: z.string().uuid(),
+  // Seeded catalog IDs (e.g. 11111111-0000-0000-0000-…) are valid Postgres UUIDs
+  // but fail Zod's strict RFC uuid() check — use guid() instead.
+  rewardId: z.guid('Invalid reward ID'),
+  idempotencyKey: z.guid('Invalid idempotency key'),
 });
 
 export const createRewardSchema = z.object({
