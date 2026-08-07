@@ -114,7 +114,7 @@ async function issueTokenPair(user: IUser, ctx: DeviceSessionContext = {}) {
   });
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setDate(expiresAt.getDate() + 10);
 
   const tokenHash = await hashRefreshToken(refreshToken);
   const stored = await refreshTokenRepository.create({
@@ -161,7 +161,7 @@ async function buildTokenPair(user: IUser) {
   });
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setDate(expiresAt.getDate() + 10);
 
   return {
     accessToken,
