@@ -7,9 +7,92 @@ import { rewardTransactionRepository } from '../rewards/reward-transaction.repos
 import { redemptionTransactionRepository } from '../transactions/redemption-transaction.repository';
 import { walletTransactionRepository } from '../wallet/wallet-transaction.repository';
 import { dashboardRepository } from './dashboard.repository';
-import { DashboardStats } from './dashboard.types';
+import {
+  DashboardOverview,
+  DashboardPartnerRequest,
+  DashboardStats,
+} from './dashboard.types';
+
+export interface DashboardOverviewQuery {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+function toPercentage(count: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((count / total) * 1000) / 10;
+}
 
 export class DashboardService {
+  /** Admin home dashboard — summary cards + pending partners + product scan donut. */
+  async getOverview(
+    query: DashboardOverviewQuery = {}
+  ): Promise<DashboardOverview> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const [
+      totalPartners,
+      pendingApprovals,
+      totalQrGenerated,
+      rewardAmountDistributed,
+      rewardPointsIssued,
+      pendingPartners,
+      scanRaw,
+    ] = await Promise.all([
+      dashboardRepository.countActivePartners(),
+      dashboardRepository.countPendingApprovals(),
+      qrCodeRepository.count(),
+      walletTransactionRepository.sumCredits(),
+      rewardTransactionRepository.sumCredits(),
+      userRepository.findPartners(page, limit, {
+        approvalStatus: 'pending',
+        search: query.search,
+      }),
+      dashboardRepository.scanDistributionByProduct(),
+    ]);
+
+    const partnerItems: DashboardPartnerRequest[] = pendingPartners.items.map(
+      (item) => ({
+        id: item._id,
+        name: item.name ?? null,
+        mobileNumber: item.mobileNumber ?? null,
+        email: item.email ?? null,
+        city: item.city ?? null,
+        state: item.state ?? null,
+        userType: item.userType ?? null,
+        avatarUrl: item.avatarUrl ?? null,
+        createdAt: item.createdAt,
+      })
+    );
+
+    return {
+      summary: {
+        totalPartners,
+        pendingApprovals,
+        totalQrGenerated,
+        rewardAmountDistributed,
+        rewardPointsIssued,
+      },
+      partnerRequests: {
+        items: partnerItems,
+        total: pendingPartners.total,
+        page,
+        limit,
+        totalPages: Math.ceil(pendingPartners.total / limit) || 0,
+      },
+      scanDistribution: {
+        totalScans: scanRaw.totalScans,
+        items: scanRaw.items.map((item) => ({
+          ...item,
+          percentage: toPercentage(item.scanCount, scanRaw.totalScans),
+        })),
+      },
+    };
+  }
+
+  /** @deprecated Prefer getOverview for the admin home screen. */
   async getStats(days = 30): Promise<DashboardStats> {
     const [
       totalUsers,

@@ -1,5 +1,9 @@
 import pool from '../../database/connection';
-import { DateCountPoint, LabeledCount } from './dashboard.types';
+import {
+  DateCountPoint,
+  LabeledCount,
+  ScanDistributionItem,
+} from './dashboard.types';
 
 function mapDateCounts(
   rows: Array<{ day: Date | string; count: string }>
@@ -14,6 +18,57 @@ function mapDateCounts(
 }
 
 export const dashboardRepository = {
+  countActivePartners: async (): Promise<number> => {
+    const result = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM users
+       WHERE role = 'user'
+         AND approval_status = 'approved'
+         AND is_active = true`
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  },
+
+  countPendingApprovals: async (): Promise<number> => {
+    const result = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM users
+       WHERE role = 'user'
+         AND approval_status = 'pending'`
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  },
+
+  /** Product scan distribution for the donut chart (all-time redemptions). */
+  scanDistributionByProduct: async (): Promise<{
+    totalScans: number;
+    items: Omit<ScanDistributionItem, 'percentage'>[];
+  }> => {
+    const result = await pool.query<{
+      product_id: string;
+      product_name: string;
+      scan_count: string;
+    }>(
+      `SELECT
+         p.id AS product_id,
+         p.name AS product_name,
+         COUNT(rt.id)::text AS scan_count
+       FROM redemption_transactions rt
+       INNER JOIN products p ON p.id = rt.product_id
+       GROUP BY p.id, p.name
+       ORDER BY COUNT(rt.id) DESC`
+    );
+
+    const items = result.rows.map((row) => ({
+      productId: row.product_id,
+      productName: row.product_name,
+      scanCount: Number(row.scan_count),
+    }));
+    const totalScans = items.reduce((sum, item) => sum + item.scanCount, 0);
+
+    return { totalScans, items };
+  },
+
   countPendingWithdrawals: async (): Promise<number> => {
     const result = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
@@ -58,7 +113,10 @@ export const dashboardRepository = {
   },
 
   productsByType: async (): Promise<LabeledCount[]> => {
-    const result = await pool.query<{ product_type: string | null; count: string }>(
+    const result = await pool.query<{
+      product_type: string | null;
+      count: string;
+    }>(
       `SELECT product_type, COUNT(*)::text AS count
        FROM products
        GROUP BY product_type
