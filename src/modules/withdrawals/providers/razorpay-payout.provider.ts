@@ -1,6 +1,6 @@
 import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
-import { PayoutMethod } from '../withdrawal.constants';
+import { PayoutMethod, PayoutProviderName } from '../withdrawal.constants';
 import { payoutProfileRepository } from '../repositories/payout-profile.repository';
 import { IPayoutProfile } from '../withdrawal.types';
 import { PayoutResult } from '../withdrawal.types';
@@ -22,6 +22,32 @@ function getRazorpayAuthHeader(): string {
     `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
   ).toString('base64');
   return `Basic ${token}`;
+}
+
+function razorpayXAccountNumber(): string {
+  const value = env.RAZORPAYX_ACCOUNT_NUMBER?.trim() ?? '';
+  if (!value) {
+    throw new BadRequestError(
+      'Razorpay payout account is not configured',
+      'Missing RAZORPAYX_ACCOUNT_NUMBER'
+    );
+  }
+  if (!/^[A-Za-z0-9]+$/.test(value)) {
+    throw new BadRequestError(
+      'Razorpay payout account number is invalid',
+      `RAZORPAYX_ACCOUNT_NUMBER has invalid characters: ${JSON.stringify(value)}`
+    );
+  }
+  return value;
+}
+
+/** Mock / stale IDs must not be reused against real Razorpay. */
+function isRazorpayContactId(id?: string | null): boolean {
+  return Boolean(id && /^cont_/i.test(id));
+}
+
+function isRazorpayFundAccountId(id?: string | null): boolean {
+  return Boolean(id && /^fa_/i.test(id));
 }
 
 async function razorpayRequest<T>(
@@ -50,16 +76,37 @@ async function razorpayRequest<T>(
 
 export class RazorpayPayoutService implements PayoutProvider {
   async ensureFundAccount(profile: IPayoutProfile): Promise<IPayoutProfile> {
-    let providerContactId = profile.providerContactId;
-    let providerFundAccountId = profile.providerFundAccountId;
+    let providerContactId = isRazorpayContactId(profile.providerContactId)
+      ? profile.providerContactId
+      : undefined;
+    let providerFundAccountId = isRazorpayFundAccountId(
+      profile.providerFundAccountId
+    )
+      ? profile.providerFundAccountId
+      : undefined;
+
+    // Stale fund account from another Razorpay key / mock era → recreate.
+    if (providerFundAccountId) {
+      try {
+        await razorpayRequest<RazorpayEntity>(
+          `/fund_accounts/${providerFundAccountId}`,
+          'GET'
+        );
+      } catch {
+        providerFundAccountId = undefined;
+        providerContactId = isRazorpayContactId(providerContactId)
+          ? providerContactId
+          : undefined;
+      }
+    }
 
     if (!providerContactId) {
       const contact = await razorpayRequest<RazorpayEntity>('/contacts', 'POST', {
         name: profile.accountHolderName,
-        email: `${profile.userId}@payout.local`,
+        email: `${profile.userId.replace(/-/g, '')}@payout.local`,
         contact: '9999999999',
         type: 'customer',
-        reference_id: profile.userId,
+        reference_id: profile.userId.slice(0, 40),
       });
       providerContactId = contact.id;
     }
@@ -92,12 +139,14 @@ export class RazorpayPayoutService implements PayoutProvider {
 
     if (
       providerContactId === profile.providerContactId &&
-      providerFundAccountId === profile.providerFundAccountId
+      providerFundAccountId === profile.providerFundAccountId &&
+      profile.provider === PayoutProviderName.RAZORPAY
     ) {
       return profile;
     }
 
     const updated = await payoutProfileRepository.update(profile._id, {
+      provider: PayoutProviderName.RAZORPAY,
       providerContactId,
       providerFundAccountId,
     });
@@ -109,17 +158,12 @@ export class RazorpayPayoutService implements PayoutProvider {
     amount: number,
     referenceId: string
   ): Promise<PayoutResult> {
-    if (!env.RAZORPAYX_ACCOUNT_NUMBER) {
-      throw new BadRequestError(
-        'Razorpay payout account is not configured',
-        'Missing RAZORPAYX_ACCOUNT_NUMBER'
-      );
-    }
+    const accountNumber = razorpayXAccountNumber();
 
-    if (!profile.providerFundAccountId) {
+    if (!isRazorpayFundAccountId(profile.providerFundAccountId)) {
       throw new BadRequestError(
         'Payout account is not ready',
-        'providerFundAccountId missing on profile'
+        'providerFundAccountId missing or invalid on profile'
       );
     }
 
@@ -127,7 +171,7 @@ export class RazorpayPayoutService implements PayoutProvider {
       '/payouts',
       'POST',
       {
-        account_number: env.RAZORPAYX_ACCOUNT_NUMBER,
+        account_number: accountNumber,
         fund_account_id: profile.providerFundAccountId,
         amount: Math.round(amount * 100),
         currency: 'INR',
