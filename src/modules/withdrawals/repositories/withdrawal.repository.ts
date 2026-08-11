@@ -196,12 +196,12 @@ export const withdrawalRepository = {
     const db = client ?? pool;
     await db.query(
       `UPDATE withdrawals
-       SET status = $2,
+       SET status = $2::varchar,
            processed_at = CASE
-             WHEN $2 IN ('success', 'failed') THEN NOW()
+             WHEN $2::text IN ('success', 'failed') THEN NOW()
              ELSE processed_at
            END
-       WHERE id = $1`,
+       WHERE id = $1::uuid`,
       [id, status]
     );
     return withdrawalRepository.findById(id, client);
@@ -216,13 +216,13 @@ export const withdrawalRepository = {
   ): Promise<IWithdrawal | null> => {
     await pool.query(
       `UPDATE withdrawals
-       SET provider_payout_id = COALESCE($2, provider_payout_id),
-           status = $3,
+       SET provider_payout_id = COALESCE($2::varchar, provider_payout_id),
+           status = $3::varchar,
            processed_at = CASE
-             WHEN $3 IN ('success', 'failed') THEN NOW()
+             WHEN $3::text IN ('success', 'failed') THEN NOW()
              ELSE processed_at
            END
-       WHERE id = $1`,
+       WHERE id = $1::uuid`,
       [id, data.providerPayoutId ?? null, data.status]
     );
     return withdrawalRepository.findById(id);

@@ -355,10 +355,12 @@ export class WithdrawalService {
     });
 
     try {
-      const providerName = profile.provider ?? getActivePayoutProvider();
+      // Always use current env provider (profile may still say "mock" from older saves).
+      const providerName = getActivePayoutProvider();
       const payoutProvider = getPayoutProvider(providerName);
+      const readyProfile = await payoutProvider.ensureFundAccount(profile);
       const payout = await payoutProvider.createPayout(
-        profile,
+        readyProfile,
         input.amount,
         referenceId
       );
