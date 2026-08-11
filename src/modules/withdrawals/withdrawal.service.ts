@@ -1,11 +1,14 @@
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { withTransaction } from '../../database/transactions';
+import { sendOtpSms } from '../../infrastructure/sms/sms.client';
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from '../../shared/utils/errors';
+import { generateOtp, hashOtp, verifyOtpHash } from '../auth/otp.util';
+import { otpVerificationRepository } from '../auth/repositories/otp-verification.repository';
 import { userRepository } from '../auth/repositories/user.repository';
 import { notificationsService } from '../notifications/index';
 import { assertPartnerApproved } from '../partners/partners.service';
@@ -19,7 +22,25 @@ import {
   IWithdrawal,
   SavePayoutProfileInput,
 } from './withdrawal.types';
-import { getActivePayoutProvider, getPayoutProvider } from './providers/payout-provider.factory';
+import {
+  getActivePayoutProvider,
+  getPayoutProvider,
+} from './providers/payout-provider.factory';
+
+const WITHDRAWAL_OTP_PURPOSE = 'withdrawal' as const;
+
+function resolveWithdrawalOtp(): string {
+  if (env.TEST_STATIC_OTP) {
+    return env.TEST_STATIC_OTP;
+  }
+  return generateOtp();
+}
+
+function maskMobile(mobileNumber: string): string {
+  const digits = mobileNumber.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `+91 ******${digits.slice(-4)}`;
+}
 
 function maskAccountNumber(accountNumber?: string): string | undefined {
   if (!accountNumber) return undefined;
@@ -129,13 +150,14 @@ export class WithdrawalService {
     };
   }
 
-  async requestWithdrawal(userId: string, input: CreateWithdrawalInput) {
+  /** Pre-checks shared by send-otp and withdraw. */
+  private async assertWithdrawalReady(userId: string, amount: number) {
     await assertPartnerApproved(userId);
 
-    if (input.amount < env.MIN_WITHDRAWAL_AMOUNT) {
+    if (amount < env.MIN_WITHDRAWAL_AMOUNT) {
       throw new BadRequestError(
         `Minimum withdrawal amount is ₹${env.MIN_WITHDRAWAL_AMOUNT}`,
-        `requestWithdrawal: amount=${input.amount}`
+        `assertWithdrawalReady: amount=${amount}`
       );
     }
 
@@ -145,7 +167,7 @@ export class WithdrawalService {
     if (!profile) {
       throw new BadRequestError(
         'Please add your bank or UPI details before withdrawing',
-        `requestWithdrawal: missing payout profile userId=${userId}`
+        `assertWithdrawalReady: missing payout profile userId=${userId}`
       );
     }
 
@@ -153,16 +175,142 @@ export class WithdrawalService {
     if (pending) {
       throw new ConflictError(
         'You already have a withdrawal in progress',
-        `requestWithdrawal: pending withdrawal=${pending._id}`
+        `assertWithdrawalReady: pending withdrawal=${pending._id}`
       );
     }
+
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(
+        'User not found',
+        `assertWithdrawalReady: userId=${userId}`
+      );
+    }
+    if (user.walletBalance < amount) {
+      throw new BadRequestError(
+        'Insufficient wallet balance',
+        `assertWithdrawalReady: balance=${user.walletBalance}`
+      );
+    }
+    if (!user.mobileNumber) {
+      throw new BadRequestError(
+        'Mobile number is required to verify this withdrawal',
+        `assertWithdrawalReady: missing mobile userId=${userId}`
+      );
+    }
+
+    return { profile, user };
+  }
+
+  /** Validate withdrawal + send OTP to the partner's registered mobile. */
+  async sendWithdrawalOtp(userId: string, amount: number) {
+    const { user } = await this.assertWithdrawalReady(userId, amount);
+    const mobileNumber = user.mobileNumber!;
+    const purpose = WITHDRAWAL_OTP_PURPOSE;
+
+    if (!env.TEST_STATIC_OTP) {
+      const latest = await otpVerificationRepository.findLatest({
+        mobileNumber,
+        purpose,
+      });
+      if (latest) {
+        const elapsed = Date.now() - latest.createdAt.getTime();
+        const cooldown = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
+        if (elapsed < cooldown) {
+          const waitSeconds = Math.ceil((cooldown - elapsed) / 1000);
+          throw new BadRequestError(
+            `Please wait ${waitSeconds} seconds before requesting a new OTP`,
+            `sendWithdrawalOtp: cooldown mobile=${mobileNumber}`
+          );
+        }
+      }
+    }
+
+    const otp = resolveWithdrawalOtp();
+    await otpVerificationRepository.invalidateActive({
+      mobileNumber,
+      purpose,
+    });
+    await otpVerificationRepository.create({
+      mobileNumber,
+      otpHash: hashOtp(otp),
+      purpose,
+      expiresAt: new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000),
+    });
+
+    if (env.TEST_STATIC_OTP) {
+      console.log(
+        `[TEST OTP] withdrawal static OTP for ${mobileNumber} amount=${amount}: ${otp} (SMS skipped)`
+      );
+    } else {
+      await sendOtpSms(mobileNumber, otp);
+    }
+
+    return {
+      mobileNumber: maskMobile(mobileNumber),
+      expiresIn: env.OTP_EXPIRES_MINUTES * 60,
+      amount,
+    };
+  }
+
+  /** Verify OTP, then initiate the wallet payout. */
+  async verifyWithdrawalOtp(userId: string, amount: number, otp: string) {
+    const user = await userRepository.findById(userId);
+    if (!user?.mobileNumber) {
+      throw new BadRequestError(
+        'Mobile number is required to verify this withdrawal',
+        `verifyWithdrawalOtp: missing mobile userId=${userId}`
+      );
+    }
+
+    const mobileNumber = user.mobileNumber;
+    const purpose = WITHDRAWAL_OTP_PURPOSE;
+    const otpRecord = await otpVerificationRepository.findLatestActive({
+      mobileNumber,
+      purpose,
+    });
+
+    const staticOtpOk = Boolean(
+      env.TEST_STATIC_OTP && otp === env.TEST_STATIC_OTP
+    );
+
+    if (!otpRecord && !staticOtpOk) {
+      throw new BadRequestError(
+        'No OTP request found. Please request a new OTP',
+        `verifyWithdrawalOtp: missing otp mobile=${mobileNumber}`
+      );
+    }
+
+    const otpValid =
+      staticOtpOk ||
+      (otpRecord ? verifyOtpHash(otp, otpRecord.otpHash) : false);
+
+    if (!otpValid) {
+      throw new BadRequestError(
+        'Invalid OTP. Please try again',
+        `verifyWithdrawalOtp: bad otp mobile=${mobileNumber}`
+      );
+    }
+
+    if (otpRecord) {
+      await otpVerificationRepository.markVerified(otpRecord._id);
+    }
+
+    return this.requestWithdrawal(userId, { amount });
+  }
+
+  async requestWithdrawal(userId: string, input: CreateWithdrawalInput) {
+    const { profile } = await this.assertWithdrawalReady(userId, input.amount);
 
     const referenceId = `wd_${crypto.randomUUID()}`;
 
     const withdrawal = await withTransaction(async (client) => {
       const user = await userRepository.findById(userId, { client });
       if (!user) {
-        throw new NotFoundError('User not found', `requestWithdrawal: userId=${userId}`);
+        throw new NotFoundError(
+          'User not found',
+          `requestWithdrawal: userId=${userId}`
+        );
       }
       if (user.walletBalance < input.amount) {
         throw new BadRequestError(
@@ -245,7 +393,10 @@ export class WithdrawalService {
 
   async refundFailedWithdrawal(withdrawal: IWithdrawal, reason: string) {
     const refunded = await withTransaction(async (client) => {
-      const current = await withdrawalRepository.findById(withdrawal._id, client);
+      const current = await withdrawalRepository.findById(
+        withdrawal._id,
+        client
+      );
       if (
         !current ||
         current.status === WithdrawalStatus.SUCCESS ||
@@ -286,20 +437,27 @@ export class WithdrawalService {
     }
   }
 
-  async handleRazorpayWebhook(payload: Record<string, unknown>, signature: string) {
+  async handleRazorpayWebhook(
+    payload: Record<string, unknown>,
+    signature: string
+  ) {
     if (env.RAZORPAY_WEBHOOK_SECRET) {
       const expected = crypto
         .createHmac('sha256', env.RAZORPAY_WEBHOOK_SECRET)
         .update(JSON.stringify(payload))
         .digest('hex');
       if (expected !== signature) {
-        throw new BadRequestError('Invalid webhook signature', 'razorpay webhook');
+        throw new BadRequestError(
+          'Invalid webhook signature',
+          'razorpay webhook'
+        );
       }
     }
 
     const event = typeof payload.event === 'string' ? payload.event : '';
-    const payoutEntity = (payload.payload as { payout?: { entity?: Record<string, unknown> } })
-      ?.payout?.entity;
+    const payoutEntity = (
+      payload.payload as { payout?: { entity?: Record<string, unknown> } }
+    )?.payout?.entity;
 
     if (!payoutEntity) return;
 
@@ -321,7 +479,11 @@ export class WithdrawalService {
       return;
     }
 
-    if (event === 'payout.failed' || event === 'payout.reversed') {
+    if (
+      event === 'payout.failed' ||
+      event === 'payout.rejected' ||
+      event === 'payout.reversed'
+    ) {
       const reason =
         typeof payoutEntity.status_details === 'string'
           ? payoutEntity.status_details
@@ -352,7 +514,9 @@ export class WithdrawalService {
 
     if (status === 'FAILED' || status === 'REVERSED') {
       const reason =
-        typeof payload.reason === 'string' ? payload.reason : 'Cashfree payout failed';
+        typeof payload.reason === 'string'
+          ? payload.reason
+          : 'Cashfree payout failed';
       await this.refundFailedWithdrawal(withdrawal, reason);
     }
   }

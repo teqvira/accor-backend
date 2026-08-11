@@ -18,6 +18,23 @@ export class WithdrawalController {
     sendSuccess(res, 'Payout details fetched successfully', { profile });
   }
 
+  async sendOtp(req: AuthRequest, res: Response): Promise<void> {
+    const result = await withdrawalService.sendWithdrawalOtp(
+      req.user!.sub,
+      req.body.amount
+    );
+    sendSuccess(res, 'OTP sent successfully', result);
+  }
+
+  async verifyOtp(req: AuthRequest, res: Response): Promise<void> {
+    const withdrawal = await withdrawalService.verifyWithdrawalOtp(
+      req.user!.sub,
+      req.body.amount,
+      req.body.otp
+    );
+    sendSuccess(res, 'Withdrawal initiated successfully', { withdrawal });
+  }
+
   async withdraw(req: AuthRequest, res: Response): Promise<void> {
     const withdrawal = await withdrawalService.requestWithdrawal(
       req.user!.sub,

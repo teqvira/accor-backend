@@ -8,6 +8,8 @@ import { withdrawalController } from '../controllers/withdrawal.controller';
 import {
   createWithdrawalSchema,
   savePayoutProfileSchema,
+  withdrawalSendOtpSchema,
+  withdrawalVerifyOtpSchema,
 } from '../withdrawal.validator';
 
 const router = Router();
@@ -28,6 +30,26 @@ router.get(
   ...userOnly,
   asyncHandler<AuthRequest>((req, res) =>
     withdrawalController.getPayoutProfile(req, res)
+  )
+);
+
+router.post(
+  '/withdraw/send-otp',
+  withdrawLimiter,
+  ...userOnly,
+  validate(withdrawalSendOtpSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.sendOtp(req, res)
+  )
+);
+
+router.post(
+  '/withdraw/verify-otp',
+  withdrawLimiter,
+  ...userOnly,
+  validate(withdrawalVerifyOtpSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    withdrawalController.verifyOtp(req, res)
   )
 );
 

@@ -1,6 +1,10 @@
 import pool from '../../../database/connection';
 
-export type OtpPurpose = 'login' | 'password_reset' | 'qr_redemption';
+export type OtpPurpose =
+  | 'login'
+  | 'password_reset'
+  | 'qr_redemption'
+  | 'withdrawal';
 
 export interface IOtpVerification {
   _id: string;

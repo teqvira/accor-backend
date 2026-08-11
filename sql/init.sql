@@ -19,3 +19,4 @@
 \i sql/migrations/019_notifications.sql
 \i sql/migrations/020_notification_broadcast_fields.sql
 \i sql/migrations/021_otp_purpose_qr_redemption.sql
+\i sql/migrations/022_otp_purpose_withdrawal.sql

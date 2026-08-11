@@ -29,3 +29,12 @@ export const savePayoutProfileSchema = z.discriminatedUnion('method', [
 export const createWithdrawalSchema = z.object({
   amount: z.coerce.number().positive('Amount must be greater than zero'),
 });
+
+export const withdrawalSendOtpSchema = z.object({
+  amount: z.coerce.number().positive('Amount must be greater than zero'),
+});
+
+export const withdrawalVerifyOtpSchema = z.object({
+  amount: z.coerce.number().positive('Amount must be greater than zero'),
+  otp: z.string().min(4).max(8),
+});
