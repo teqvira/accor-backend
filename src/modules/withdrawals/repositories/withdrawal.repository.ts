@@ -196,13 +196,14 @@ export const withdrawalRepository = {
     const db = client ?? pool;
     await db.query(
       `UPDATE withdrawals
-       SET status = $2::varchar,
-           processed_at = CASE
-             WHEN $2::text IN ('success', 'failed') THEN NOW()
-             ELSE processed_at
-           END
-       WHERE id = $1::uuid`,
-      [id, status]
+       SET status = $2,
+           processed_at = CASE WHEN $3 THEN NOW() ELSE processed_at END
+       WHERE id = $1`,
+      [
+        id,
+        status,
+        status === WithdrawalStatus.SUCCESS || status === WithdrawalStatus.FAILED,
+      ]
     );
     return withdrawalRepository.findById(id, client);
   },
