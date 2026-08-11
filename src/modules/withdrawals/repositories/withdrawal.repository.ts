@@ -214,17 +214,29 @@ export const withdrawalRepository = {
       status: WithdrawalStatus;
     }
   ): Promise<IWithdrawal | null> => {
-    await pool.query(
-      `UPDATE withdrawals
-       SET provider_payout_id = COALESCE($2::varchar, provider_payout_id),
-           status = $3::varchar,
-           processed_at = CASE
-             WHEN $3::text IN ('success', 'failed') THEN NOW()
-             ELSE processed_at
-           END
-       WHERE id = $1::uuid`,
-      [id, data.providerPayoutId ?? null, data.status]
-    );
+    const providerPayoutId = data.providerPayoutId ?? null;
+    const shouldStampProcessed =
+      data.status === WithdrawalStatus.SUCCESS ||
+      data.status === WithdrawalStatus.FAILED;
+
+    if (providerPayoutId) {
+      await pool.query(
+        `UPDATE withdrawals
+         SET provider_payout_id = $2,
+             status = $3,
+             processed_at = CASE WHEN $4 THEN NOW() ELSE processed_at END
+         WHERE id = $1`,
+        [id, providerPayoutId, data.status, shouldStampProcessed]
+      );
+    } else {
+      await pool.query(
+        `UPDATE withdrawals
+         SET status = $2,
+             processed_at = CASE WHEN $3 THEN NOW() ELSE processed_at END
+         WHERE id = $1`,
+        [id, data.status, shouldStampProcessed]
+      );
+    }
     return withdrawalRepository.findById(id);
   },
 
