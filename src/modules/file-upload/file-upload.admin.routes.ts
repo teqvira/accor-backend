@@ -5,10 +5,12 @@ import { adminOnly } from '../auth/guards';
 import {
   createPartnerDocumentPresignedUploadUrl,
   createPresignedUploadUrl,
+  createProfilePresignedUploadUrl,
 } from './file-upload.admin.controller';
 import {
   partnerDocumentPresignedUploadSchema,
   presignedUploadSchema,
+  profilePresignedUploadSchema,
 } from './file-upload.validator';
 
 const router = Router();
@@ -28,4 +30,13 @@ router.post(
   asyncHandler(createPartnerDocumentPresignedUploadUrl)
 );
 
+/** Upload Admin avatar (purpose: avatar). */
+router.post(
+  '/profile-presigned-url',
+  ...adminOnly,
+  validate(profilePresignedUploadSchema),
+  asyncHandler(createProfilePresignedUploadUrl)
+);
+
 export default router;
+

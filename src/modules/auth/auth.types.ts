@@ -32,3 +32,20 @@ export interface AuthRequest extends Request {
   /** FCM / device metadata from X-Device-* headers or body (see captureDeviceContext). */
   deviceContext?: DeviceContext;
 }
+
+export interface AdminProfileResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatarUrl?: string;
+  mobileNumber?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpdateAdminProfileInput {
+  name?: string;
+  avatarUrl?: string | null;
+}
+

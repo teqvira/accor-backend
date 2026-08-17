@@ -19,8 +19,13 @@ import { userRepository } from './repositories/user.repository';
 import { userDeviceTokenRepository } from './repositories/user-device-token.repository';
 import { userSessionRepository } from './repositories/user-session.repository';
 import { invalidTokenRepository } from './repositories/invalid-token.repository';
-import { JwtAccessPayload } from './auth.types';
+import {
+  AdminProfileResponse,
+  JwtAccessPayload,
+  UpdateAdminProfileInput,
+} from './auth.types';
 import { IUser, UserRole } from './user.types';
+import { isOwnProfileUploadUrl } from '../file-upload/profile-upload-key';
 import type { DevicePlatform } from './repositories/user-device-token.repository';
 import { sendOtpEmail } from '../../infrastructure/email/email.client';
 import { sendOtpSms } from '../../infrastructure/sms/sms.client';
@@ -730,6 +735,85 @@ export class AuthService {
 
     return { message: 'Password updated successfully' };
   }
+
+  async getAdminProfile(adminId: string): Promise<AdminProfileResponse> {
+    const user = await userRepository.findById(adminId);
+    if (!user) {
+      throw new NotFoundError(
+        'Admin account not found',
+        `getAdminProfile: user not found adminId=${adminId}`
+      );
+    }
+
+    if (user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN) {
+      throw new ForbiddenError(
+        'Access denied. Admin role required.',
+        `getAdminProfile: non-admin access attempt adminId=${adminId}, role=${user.role}`
+      );
+    }
+
+    return {
+      id: user._id,
+      name: user.name ?? '',
+      email: user.email ?? '',
+      role: user.role,
+      avatarUrl: user.avatarUrl,
+      mobileNumber: user.mobileNumber,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
+  async updateAdminProfile(
+    adminId: string,
+    input: UpdateAdminProfileInput
+  ): Promise<AdminProfileResponse> {
+    const existing = await userRepository.findById(adminId);
+    if (!existing) {
+      throw new NotFoundError(
+        'Admin account not found',
+        `updateAdminProfile: user not found adminId=${adminId}`
+      );
+    }
+
+    if (existing.role !== UserRole.SUPER_ADMIN && existing.role !== UserRole.ADMIN) {
+      throw new ForbiddenError(
+        'Access denied. Admin role required.',
+        `updateAdminProfile: non-admin access attempt adminId=${adminId}, role=${existing.role}`
+      );
+    }
+
+    if (input.avatarUrl && !isOwnProfileUploadUrl(input.avatarUrl, adminId, 'avatar')) {
+      throw new BadRequestError(
+        'Avatar URL must be an uploaded profile image for this account',
+        `updateAdminProfile: invalid avatarUrl for adminId=${adminId}`
+      );
+    }
+
+    const updated = await userRepository.update(adminId, {
+      name: input.name !== undefined ? input.name.trim() : undefined,
+      avatarUrl: input.avatarUrl,
+    });
+
+    if (!updated) {
+      throw new NotFoundError(
+        'Admin account not found',
+        `updateAdminProfile: update failed adminId=${adminId}`
+      );
+    }
+
+    return {
+      id: updated._id,
+      name: updated.name ?? '',
+      email: updated.email ?? '',
+      role: updated.role,
+      avatarUrl: updated.avatarUrl,
+      mobileNumber: updated.mobileNumber,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+  }
 }
 
 export const authService = new AuthService();
+

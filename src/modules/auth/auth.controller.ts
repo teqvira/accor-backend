@@ -116,6 +116,29 @@ export class AuthController {
     );
     sendSuccess(res, result.message);
   }
+
+  async getAdminProfile(req: AuthRequest, res: Response): Promise<void> {
+    const profile = await authService.getAdminProfile(req.user!.sub);
+    sendSuccess(res, 'Admin profile fetched successfully', profile);
+  }
+
+  async updateAdminProfile(req: AuthRequest, res: Response): Promise<void> {
+    const profile = await authService.updateAdminProfile(
+      req.user!.sub,
+      req.body
+    );
+    sendSuccess(res, 'Admin profile updated successfully', profile);
+  }
+
+  async changePassword(req: AuthRequest, res: Response): Promise<void> {
+    const result = await authService.resetPasswordWithCurrent(
+      req.user!.sub,
+      req.body.currentPassword,
+      req.body.newPassword
+    );
+    sendSuccess(res, result.message);
+  }
 }
 
 export const authController = new AuthController();
+

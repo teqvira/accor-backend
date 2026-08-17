@@ -77,8 +77,25 @@ export const resetPasswordWithTokenSchema = z.object({
 });
 
 export const resetPasswordWithCurrentSchema = z.object({
-  currentPassword: z.string().min(1),
+  currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: passwordSchema,
+});
+
+export const changePasswordSchema = resetPasswordWithCurrentSchema;
+
+export const updateAdminProfileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name cannot exceed 100 characters')
+    .optional(),
+  avatarUrl: z
+    .string()
+    .url('Avatar URL must be a valid URL')
+    .max(2048, 'Avatar URL is too long')
+    .nullable()
+    .optional(),
 });
 
 export const sendMobileOtpSchema = z.object({
@@ -88,3 +105,4 @@ export const sendMobileOtpSchema = z.object({
 export const resendMobileOtpSchema = z.object({
   mobileNumber: mobileNumberSchema,
 });
+
