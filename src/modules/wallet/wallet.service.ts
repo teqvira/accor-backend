@@ -3,11 +3,15 @@ import { BadRequestError, NotFoundError } from '../../shared/utils/errors';
 import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
 import { walletTransactionRepository } from './wallet-transaction.repository';
+import { env } from '../../config/env';
+import { razorpayPayoutService } from '../withdrawals/providers/razorpay-payout.provider';
 import {
+  AdminWalletScanQuery,
   IWalletTransaction,
   WalletReferenceType,
   WalletTransactionType,
 } from './wallet.types';
+
 
 function sanitizeTransaction(tx: IWalletTransaction) {
   return {
@@ -148,6 +152,58 @@ export class WalletService {
       recentActivity,
     };
   }
+
+  async getAdminKpis() {
+    const [razorpayInfo, totalWithdrawn, totalUserWalletBalance, totalScansCount] =
+      await Promise.all([
+        razorpayPayoutService.getAccountBalance(),
+        walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
+        walletTransactionRepository.sumAllUserWalletBalances(),
+        walletTransactionRepository.countTotalScans(),
+      ]);
+
+    return {
+      razorpayBalance: razorpayInfo.balance,
+      totalWithdrawn,
+      totalUserWalletBalance,
+      totalScansCount,
+      isRazorpayConfigured: razorpayInfo.isConfigured,
+      currency: razorpayInfo.currency,
+    };
+  }
+
+  async getAdminScans(page = 1, limit = 20, filters: AdminWalletScanQuery = {}) {
+    const { items, total } = await walletTransactionRepository.findAdminScans(
+      page,
+      limit,
+      filters
+    );
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 0,
+    };
+  }
+
+  async getTopupDetails() {
+    const accountNumber = env.RAZORPAYX_ACCOUNT_NUMBER || null;
+
+    return {
+      accountNumber,
+      ifsc: 'RAZR0000001',
+      beneficiaryName: 'ACCOR QR Payouts Account',
+      bankName: 'RBL Bank / RazorpayX Virtual Banking',
+      instructions: [
+        'Transfer funds via NEFT/RTGS/IMPS to the virtual account number above.',
+        'Funds will be immediately reflected in your Razorpay X wallet balance.',
+        'Ensure your account balance is higher than pending withdrawal requests.',
+      ],
+    };
+  }
 }
 
 export const walletService = new WalletService();
+

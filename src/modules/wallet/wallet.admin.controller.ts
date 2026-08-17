@@ -1,10 +1,39 @@
 import { Response } from 'express';
-import { getParam, getQueryNumber } from '../../shared/utils/params';
+import {
+  getOptionalQueryParam,
+  getParam,
+  getQueryNumber,
+} from '../../shared/utils/params';
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from '../auth/auth.types';
 import { walletService } from './wallet.service';
 
 export class WalletAdminController {
+  async getKpis(_req: AuthRequest, res: Response): Promise<void> {
+    const result = await walletService.getAdminKpis();
+    sendSuccess(res, 'Wallet KPIs fetched successfully', result);
+  }
+
+  async listScans(req: AuthRequest, res: Response): Promise<void> {
+    const page = getQueryNumber(req.query.page, 1);
+    const limit = getQueryNumber(req.query.limit, 20);
+    const search = getOptionalQueryParam(req.query.search);
+    const startDate = getOptionalQueryParam(req.query.startDate);
+    const endDate = getOptionalQueryParam(req.query.endDate);
+
+    const result = await walletService.getAdminScans(page, limit, {
+      search,
+      startDate,
+      endDate,
+    });
+    sendSuccess(res, 'Wallet scans fetched successfully', result);
+  }
+
+  async getTopupDetails(_req: AuthRequest, res: Response): Promise<void> {
+    const result = await walletService.getTopupDetails();
+    sendSuccess(res, 'Razorpay wallet top-up details fetched successfully', result);
+  }
+
   async getUserWallet(req: AuthRequest, res: Response): Promise<void> {
     const result = await walletService.getUserWalletAdmin(
       getParam(req.params.userId)
@@ -25,3 +54,4 @@ export class WalletAdminController {
 }
 
 export const walletAdminController = new WalletAdminController();
+
