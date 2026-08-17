@@ -4,7 +4,11 @@ import { validate } from '../../shared/middleware/validate';
 import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
 import { walletAdminController } from './wallet.admin.controller';
-import { adminWalletScansQuerySchema } from './wallet.validator';
+import {
+  adminWalletScansQuerySchema,
+  createWalletOrderSchema,
+  verifyWalletPaymentSchema,
+} from './wallet.validator';
 
 const router = Router();
 
@@ -33,6 +37,24 @@ router.get(
   )
 );
 
+router.post(
+  '/create-order',
+  ...adminOnly,
+  validate(createWalletOrderSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    walletAdminController.createOrder(req, res)
+  )
+);
+
+router.post(
+  '/verify-payment',
+  ...adminOnly,
+  validate(verifyWalletPaymentSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    walletAdminController.verifyPayment(req, res)
+  )
+);
+
 router.get(
   '/users/:userId',
   ...adminOnly,
@@ -50,4 +72,5 @@ router.get(
 );
 
 export default router;
+
 

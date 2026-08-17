@@ -51,7 +51,19 @@ export class WalletAdminController {
     );
     sendSuccess(res, 'User wallet transactions fetched successfully', result);
   }
+
+  async createOrder(req: AuthRequest, res: Response): Promise<void> {
+    const { amount, currency } = req.body;
+    const result = await walletService.createOrder(amount, currency);
+    sendSuccess(res, 'Wallet order created successfully', result);
+  }
+
+  async verifyPayment(req: AuthRequest, res: Response): Promise<void> {
+    const result = await walletService.verifyPayment(req.body);
+    sendSuccess(res, 'Wallet payment verified successfully', result);
+  }
 }
 
 export const walletAdminController = new WalletAdminController();
+
 

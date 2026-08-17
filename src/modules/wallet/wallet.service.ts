@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { PoolClient } from 'pg';
 import { BadRequestError, NotFoundError } from '../../shared/utils/errors';
 import { activityService } from '../activity/activity.service';
@@ -11,7 +12,6 @@ import {
   WalletReferenceType,
   WalletTransactionType,
 } from './wallet.types';
-
 
 function sanitizeTransaction(tx: IWalletTransaction) {
   return {
@@ -203,7 +203,90 @@ export class WalletService {
       ],
     };
   }
+
+  async createOrder(amount: number, currency: string = 'INR') {
+    const amountInPaise = Math.round(amount * 100);
+
+    if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+      const token = Buffer.from(
+        `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
+      ).toString('base64');
+
+      const response = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency,
+          receipt: `topup_${Date.now()}`,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        id?: string;
+        amount?: number;
+        currency?: string;
+        error?: { description?: string };
+      };
+
+      if (!response.ok || !data.id) {
+        throw new BadRequestError(
+          data.error?.description ?? 'Failed to create Razorpay order',
+          `Razorpay create order failed: ${JSON.stringify(data)}`
+        );
+      }
+
+      return {
+        orderId: data.id,
+        id: data.id,
+        amount: data.amount ?? amountInPaise,
+        currency: data.currency ?? currency,
+        keyId: env.RAZORPAY_KEY_ID,
+      };
+    }
+
+    // Mock order fallback when Razorpay credentials are not set in environment
+    const mockOrderId = `order_mock_${Date.now()}`;
+    return {
+      orderId: mockOrderId,
+      id: mockOrderId,
+      amount: amountInPaise,
+      currency,
+      keyId: 'rzp_test_mock',
+    };
+  }
+
+  async verifyPayment(payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    amount?: number;
+  }) {
+    if (env.RAZORPAY_KEY_SECRET && !payload.razorpay_order_id.startsWith('order_mock_')) {
+      const generatedSignature = crypto
+        .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
+        .update(`${payload.razorpay_order_id}|${payload.razorpay_payment_id}`)
+        .digest('hex');
+
+      if (generatedSignature !== payload.razorpay_signature) {
+        throw new BadRequestError(
+          'Invalid payment signature',
+          'Razorpay signature verification failed'
+        );
+      }
+    }
+
+    return {
+      verified: true,
+      orderId: payload.razorpay_order_id,
+      paymentId: payload.razorpay_payment_id,
+    };
+  }
 }
 
 export const walletService = new WalletService();
+
 
