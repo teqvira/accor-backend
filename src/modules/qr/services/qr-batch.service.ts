@@ -13,6 +13,7 @@ import {
   CreateBatchInput,
   IQrBatch,
   QrBatchListItem,
+  UpdateBatchInput,
   QrBatchOptionItem,
   QrBatchStatus,
   QrCodeListFilters,
@@ -148,6 +149,89 @@ export class QrBatchService {
       throw new NotFoundError('QR batch not found', `getBatchById: id=${id}`);
     }
     return toBatchListItem(batch);
+  }
+
+  async updateBatch(id: string, input: UpdateBatchInput) {
+    const existing = await qrBatchRepository.findById(id);
+    if (!existing) {
+      throw new NotFoundError('QR batch not found', `updateBatch: id=${id}`);
+    }
+
+    if (input.productId && input.productId !== existing.productId) {
+      if (existing.generatedCount > 0) {
+        throw new BadRequestError(
+          'Cannot change product after QR codes have been generated',
+          `updateBatch: generatedCount=${existing.generatedCount} id=${id}`
+        );
+      }
+      await this.getActiveProductForBatch(input.productId);
+    }
+
+    if (
+      input.totalQrs !== undefined &&
+      input.totalQrs < existing.generatedCount
+    ) {
+      throw new BadRequestError(
+        `Cannot set total QRs below already generated count (${existing.generatedCount})`,
+        `updateBatch: totalQrs=${input.totalQrs} generatedCount=${existing.generatedCount} id=${id}`
+      );
+    }
+
+    const nextStart =
+      input.startDate !== undefined
+        ? input.startDate
+          ? new Date(input.startDate)
+          : undefined
+        : existing.startDate;
+    const nextEnd =
+      input.endDate !== undefined
+        ? input.endDate
+          ? new Date(input.endDate)
+          : undefined
+        : existing.endDate;
+
+    if (nextStart && Number.isNaN(nextStart.getTime())) {
+      throw new BadRequestError(
+        'Start date is invalid',
+        `updateBatch: startDate=${input.startDate} id=${id}`
+      );
+    }
+    if (nextEnd && Number.isNaN(nextEnd.getTime())) {
+      throw new BadRequestError(
+        'End date is invalid',
+        `updateBatch: endDate=${input.endDate} id=${id}`
+      );
+    }
+    if (nextStart && nextEnd && nextEnd < nextStart) {
+      throw new BadRequestError(
+        'End date must be on or after start date',
+        `updateBatch: id=${id}`
+      );
+    }
+
+    const updated = await qrBatchRepository.update(id, {
+      couponName:
+        input.couponName !== undefined
+          ? input.couponName?.trim() || null
+          : undefined,
+      totalQrs: input.totalQrs,
+      productId: input.productId,
+      walletAmount: input.couponValue,
+      rewardPoints: input.rewardPoints,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      active:
+        input.status !== undefined ? input.status !== 'inactive' : undefined,
+      labelShape: input.shape,
+      labelColor: input.color,
+    });
+
+    if (!updated) {
+      throw new NotFoundError('QR batch not found', `updateBatch: id=${id}`);
+    }
+
+    const batchWithProduct = await qrBatchRepository.findById(updated._id);
+    return toBatchListItem(batchWithProduct ?? updated);
   }
 
   async generateBatch(id: string) {

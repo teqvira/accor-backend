@@ -69,6 +69,19 @@ export interface CreateBatchInput {
   createdBy?: string;
 }
 
+export interface UpdateBatchInput {
+  productId?: string;
+  totalQrs?: number;
+  couponName?: string | null;
+  couponValue?: number;
+  rewardPoints?: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: 'active' | 'inactive';
+  shape?: QrLabelShape;
+  color?: QrLabelColor;
+}
+
 export interface QrCodeListFilters {
   batchId?: string;
   redeemed?: boolean;

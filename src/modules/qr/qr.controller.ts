@@ -31,6 +31,14 @@ export class QrController {
     sendSuccess(res, 'QR batch fetched successfully', { batch });
   }
 
+  async updateBatch(req: AuthRequest, res: Response): Promise<void> {
+    const batch = await qrBatchService.updateBatch(
+      getParam(req.params.id),
+      req.body
+    );
+    sendSuccess(res, 'QR batch updated successfully', { batch });
+  }
+
   async generateBatch(req: AuthRequest, res: Response): Promise<void> {
     const result = await qrBatchService.generateBatch(getParam(req.params.id));
     sendSuccess(res, 'QR codes generated successfully', result);

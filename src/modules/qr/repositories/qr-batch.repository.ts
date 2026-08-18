@@ -104,6 +104,19 @@ export interface CreateQrBatchData {
   createdBy?: string;
 }
 
+export interface UpdateQrBatchData {
+  couponName?: string | null;
+  totalQrs?: number;
+  productId?: string;
+  walletAmount?: number;
+  rewardPoints?: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  active?: boolean;
+  labelShape?: QrLabelShape;
+  labelColor?: QrLabelColor;
+}
+
 export const qrBatchRepository = {
   create: async (data: CreateQrBatchData): Promise<IQrBatch> => {
     const result = await pool.query<QrBatchRow>(
@@ -134,18 +147,34 @@ export const qrBatchRepository = {
   },
 
   findById: async (id: string): Promise<IQrBatch | null> => {
-    const result = await pool.query<QrBatchRow>(
-      `SELECT ${BATCH_COLUMNS},
-              p.sku_code AS product_sku_code,
-              p.name AS product_name,
-              p.image_url AS product_image_url,
-              p.color AS product_color
-       FROM qr_batches b
-       LEFT JOIN products p ON p.id = b.product_id
-       WHERE b.id = $1`,
-      [id]
-    );
-    return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
+    try {
+      const result = await pool.query<QrBatchRow>(
+        `SELECT ${BATCH_COLUMNS},
+                p.sku_code AS product_sku_code,
+                p.name AS product_name,
+                p.image_url AS product_image_url,
+                p.color AS product_color,
+                COUNT(qc.id) FILTER (WHERE qc.redeemed = true)::text AS redeemed_count,
+                COUNT(qc.id) FILTER (WHERE qc.redeemed = false)::text AS pending_count
+         FROM qr_batches b
+         LEFT JOIN products p ON p.id = b.product_id
+         LEFT JOIN qr_codes qc ON qc.batch_id = b.id
+         WHERE b.id = $1
+         GROUP BY b.id, p.sku_code, p.name, p.image_url, p.color`,
+        [id]
+      );
+      return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
+    } catch (err) {
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code: string }).code === '22P02'
+      ) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   findAll: async (
@@ -185,6 +214,44 @@ export const qrBatchRepository = {
       `SELECT COUNT(*)::text AS count FROM qr_batches`
     );
     return Number(result.rows[0]?.count ?? 0);
+  },
+
+  update: async (
+    id: string,
+    data: UpdateQrBatchData
+  ): Promise<IQrBatch | null> => {
+    const sets: string[] = [];
+    const values: unknown[] = [id];
+    let paramIndex = 2;
+
+    const assign = (column: string, value: unknown) => {
+      sets.push(`${column} = $${paramIndex++}`);
+      values.push(value);
+    };
+
+    if (data.couponName !== undefined) assign('coupon_name', data.couponName);
+    if (data.totalQrs !== undefined) assign('total_qrs', data.totalQrs);
+    if (data.productId !== undefined) assign('product_id', data.productId);
+    if (data.walletAmount !== undefined) assign('wallet_amount', data.walletAmount);
+    if (data.rewardPoints !== undefined) assign('reward_points', data.rewardPoints);
+    if (data.startDate !== undefined) assign('start_date', data.startDate);
+    if (data.endDate !== undefined) assign('end_date', data.endDate);
+    if (data.active !== undefined) assign('active', data.active);
+    if (data.labelShape !== undefined) assign('label_shape', data.labelShape);
+    if (data.labelColor !== undefined) assign('label_color', data.labelColor);
+
+    if (sets.length === 0) {
+      return qrBatchRepository.findById(id);
+    }
+
+    const result = await pool.query<QrBatchRow>(
+      `UPDATE qr_batches
+       SET ${sets.join(', ')}, updated_at = NOW()
+       WHERE id = $1
+       RETURNING ${BATCH_RETURNING}`,
+      values
+    );
+    return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
   },
 
   updateAfterGeneration: async (
