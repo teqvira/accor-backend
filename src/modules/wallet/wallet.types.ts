@@ -27,3 +27,44 @@ export interface CreateWalletTransactionData {
   referenceId?: string;
   remarks?: string;
 }
+
+export interface AdminWalletKpiResponse {
+  razorpayBalance: number;
+  totalWithdrawn: number;
+  totalUserWalletBalance: number;
+  totalScansCount: number;
+  isRazorpayConfigured: boolean;
+  currency: string;
+}
+
+export interface AdminWalletScanItem {
+  id: string;
+  userId: string;
+  name: string | null;
+  mobileNumber: string | null;
+  recentScanValue: number;
+  walletBalance: number;
+  totalWithdrawn: number;
+  lastActivity: Date;
+  qrCode: string;
+  productName: string | null;
+  skuCode: string | null;
+  rewardPoints: number;
+}
+
+export interface AdminWalletScanQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface AdminTopupDetailsResponse {
+  accountNumber: string | null;
+  ifsc: string | null;
+  beneficiaryName: string | null;
+  bankName: string | null;
+  instructions: string[];
+}
+

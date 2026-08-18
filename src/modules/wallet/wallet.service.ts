@@ -1,9 +1,13 @@
+import crypto from 'crypto';
 import { PoolClient } from 'pg';
 import { BadRequestError, NotFoundError } from '../../shared/utils/errors';
 import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
 import { walletTransactionRepository } from './wallet-transaction.repository';
+import { env } from '../../config/env';
+import { razorpayPayoutService } from '../withdrawals/providers/razorpay-payout.provider';
 import {
+  AdminWalletScanQuery,
   IWalletTransaction,
   WalletReferenceType,
   WalletTransactionType,
@@ -148,6 +152,141 @@ export class WalletService {
       recentActivity,
     };
   }
+
+  async getAdminKpis() {
+    const [razorpayInfo, totalWithdrawn, totalUserWalletBalance, totalScansCount] =
+      await Promise.all([
+        razorpayPayoutService.getAccountBalance(),
+        walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
+        walletTransactionRepository.sumAllUserWalletBalances(),
+        walletTransactionRepository.countTotalScans(),
+      ]);
+
+    return {
+      razorpayBalance: razorpayInfo.balance,
+      totalWithdrawn,
+      totalUserWalletBalance,
+      totalScansCount,
+      isRazorpayConfigured: razorpayInfo.isConfigured,
+      currency: razorpayInfo.currency,
+    };
+  }
+
+  async getAdminScans(page = 1, limit = 20, filters: AdminWalletScanQuery = {}) {
+    const { items, total } = await walletTransactionRepository.findAdminScans(
+      page,
+      limit,
+      filters
+    );
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 0,
+    };
+  }
+
+  async getTopupDetails() {
+    const accountNumber = env.RAZORPAYX_ACCOUNT_NUMBER || null;
+
+    return {
+      accountNumber,
+      ifsc: 'RAZR0000001',
+      beneficiaryName: 'ACCOR QR Payouts Account',
+      bankName: 'RBL Bank / RazorpayX Virtual Banking',
+      instructions: [
+        'Transfer funds via NEFT/RTGS/IMPS to the virtual account number above.',
+        'Funds will be immediately reflected in your Razorpay X wallet balance.',
+        'Ensure your account balance is higher than pending withdrawal requests.',
+      ],
+    };
+  }
+
+  async createOrder(amount: number, currency: string = 'INR') {
+    const amountInPaise = Math.round(amount * 100);
+
+    if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+      const token = Buffer.from(
+        `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
+      ).toString('base64');
+
+      const response = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency,
+          receipt: `topup_${Date.now()}`,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        id?: string;
+        amount?: number;
+        currency?: string;
+        error?: { description?: string };
+      };
+
+      if (!response.ok || !data.id) {
+        throw new BadRequestError(
+          data.error?.description ?? 'Failed to create Razorpay order',
+          `Razorpay create order failed: ${JSON.stringify(data)}`
+        );
+      }
+
+      return {
+        orderId: data.id,
+        id: data.id,
+        amount: data.amount ?? amountInPaise,
+        currency: data.currency ?? currency,
+        keyId: env.RAZORPAY_KEY_ID,
+      };
+    }
+
+    // Mock order fallback when Razorpay credentials are not set in environment
+    const mockOrderId = `order_mock_${Date.now()}`;
+    return {
+      orderId: mockOrderId,
+      id: mockOrderId,
+      amount: amountInPaise,
+      currency,
+      keyId: 'rzp_test_mock',
+    };
+  }
+
+  async verifyPayment(payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    amount?: number;
+  }) {
+    if (env.RAZORPAY_KEY_SECRET && !payload.razorpay_order_id.startsWith('order_mock_')) {
+      const generatedSignature = crypto
+        .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
+        .update(`${payload.razorpay_order_id}|${payload.razorpay_payment_id}`)
+        .digest('hex');
+
+      if (generatedSignature !== payload.razorpay_signature) {
+        throw new BadRequestError(
+          'Invalid payment signature',
+          'Razorpay signature verification failed'
+        );
+      }
+    }
+
+    return {
+      verified: true,
+      orderId: payload.razorpay_order_id,
+      paymentId: payload.razorpay_payment_id,
+    };
+  }
 }
 
 export const walletService = new WalletService();
+
+

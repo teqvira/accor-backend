@@ -188,6 +188,45 @@ export class RazorpayPayoutService implements PayoutProvider {
       rawResponse: payout as unknown as Record<string, unknown>,
     };
   }
+
+  async getAccountBalance(): Promise<{
+    balance: number;
+    currency: string;
+    isConfigured: boolean;
+  }> {
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+      return { balance: 0, currency: 'INR', isConfigured: false };
+    }
+
+    try {
+      const accountNumber = env.RAZORPAYX_ACCOUNT_NUMBER?.trim();
+      if (accountNumber && /^[A-Za-z0-9]+$/.test(accountNumber)) {
+        const data = await razorpayRequest<{ balance: number; currency: string }>(
+          `/banking/accounts/${accountNumber}/balance`,
+          'GET'
+        );
+        return {
+          balance: Number(((data.balance ?? 0) / 100).toFixed(2)),
+          currency: data.currency || 'INR',
+          isConfigured: true,
+        };
+      }
+
+      const data = await razorpayRequest<{ balance: number; currency: string }>(
+        '/balances',
+        'GET'
+      );
+      return {
+        balance: Number(((data.balance ?? 0) / 100).toFixed(2)),
+        currency: data.currency || 'INR',
+        isConfigured: true,
+      };
+    } catch (err) {
+      console.warn('Failed to fetch Razorpay balance:', err);
+      return { balance: 0, currency: 'INR', isConfigured: false };
+    }
+  }
 }
 
 export const razorpayPayoutService = new RazorpayPayoutService();
+
