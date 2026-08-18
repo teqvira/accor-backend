@@ -199,34 +199,48 @@ export class RazorpayPayoutService implements PayoutProvider {
     }
 
     try {
-      const accountNumber = env.RAZORPAYX_ACCOUNT_NUMBER?.trim();
-      if (accountNumber && /^[A-Za-z0-9]+$/.test(accountNumber)) {
-        const data = await razorpayRequest<{ balance: number; currency: string }>(
-          `/banking/accounts/${accountNumber}/balance`,
-          'GET'
-        );
-        return {
-          balance: Number(((data.balance ?? 0) / 100).toFixed(2)),
-          currency: data.currency || 'INR',
-          isConfigured: true,
-        };
+      interface RazorpayBankingBalancesResponse {
+        entity?: string;
+        count?: number;
+        items?: Array<{
+          account_number?: string;
+          amount?: number;
+          balance?: number;
+          currency?: string;
+        }>;
       }
 
-      const data = await razorpayRequest<{ balance: number; currency: string }>(
-        '/balances',
+      const data = await razorpayRequest<RazorpayBankingBalancesResponse>(
+        '/banking_balances',
         'GET'
       );
+
+      const targetAccountNumber = env.RAZORPAYX_ACCOUNT_NUMBER?.trim();
+      let account = data?.items?.find(
+        (acc) =>
+          targetAccountNumber &&
+          acc.account_number &&
+          acc.account_number.toLowerCase() === targetAccountNumber.toLowerCase()
+      );
+
+      if (!account && data?.items && data.items.length > 0) {
+        account = data.items[0];
+      }
+
+      const balanceInPaise = account?.amount ?? account?.balance ?? 0;
+
       return {
-        balance: Number(((data.balance ?? 0) / 100).toFixed(2)),
-        currency: data.currency || 'INR',
+        balance: Number((balanceInPaise / 100).toFixed(2)),
+        currency: account?.currency || 'INR',
         isConfigured: true,
       };
     } catch (err) {
-      console.warn('Failed to fetch Razorpay balance:', err);
+      console.error('Failed to fetch RazorpayX banking balance:', err);
       return { balance: 0, currency: 'INR', isConfigured: false };
     }
   }
 }
 
 export const razorpayPayoutService = new RazorpayPayoutService();
+
 
