@@ -239,8 +239,53 @@ export class RazorpayPayoutService implements PayoutProvider {
       return { balance: 0, currency: 'INR', isConfigured: false };
     }
   }
+
+  async getUnsettledBalance(): Promise<number> {
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+      return 0;
+    }
+
+    try {
+      interface RazorpayPaymentsResponse {
+        entity?: string;
+        count?: number;
+        items?: Array<{
+          id?: string;
+          amount?: number;
+          fee?: number;
+          tax?: number;
+          status?: string;
+          settled?: boolean;
+        }>;
+      }
+
+      const data = await razorpayRequest<RazorpayPaymentsResponse>(
+        '/payments?count=50',
+        'GET'
+      );
+
+      if (!data?.items || !Array.isArray(data.items)) {
+        return 0;
+      }
+
+      const unsettledPaise = data.items
+        .filter((p) => p.status === 'captured' && p.settled === false)
+        .reduce((sum, p) => {
+          const gross = p.amount ?? 0;
+          const fee = p.fee ?? 0;
+          const tax = p.tax ?? 0;
+          return sum + (gross - fee - tax);
+        }, 0);
+
+      return Number((unsettledPaise / 100).toFixed(2));
+    } catch (err) {
+      console.warn('Failed to fetch Razorpay unsettled balance:', err);
+      return 0;
+    }
+  }
 }
 
 export const razorpayPayoutService = new RazorpayPayoutService();
+
 
 
