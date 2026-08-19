@@ -59,9 +59,10 @@ export class WalletAdminController {
   }
 
   async verifyPayment(req: AuthRequest, res: Response): Promise<void> {
-    const result = await walletService.verifyPayment(req.body);
+    const result = await walletService.verifyPayment(req.body, req.user?.sub);
     sendSuccess(res, 'Wallet payment verified successfully', result);
   }
+
 }
 
 export const walletAdminController = new WalletAdminController();
