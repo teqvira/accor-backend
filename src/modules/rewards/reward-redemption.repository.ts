@@ -23,6 +23,11 @@ interface RewardRedemptionRow {
   processed_at: Date | null;
   redeemed_at: Date;
   created_at: Date;
+  handover_image_url?: string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  recipient_note?: string | null;
+  handover_date?: Date | null;
   user_name?: string | null;
   user_mobile_number?: string | null;
 }
@@ -43,6 +48,11 @@ function mapRow(row: RewardRedemptionRow): IRewardRedemption {
     processedAt: row.processed_at,
     redeemedAt: row.redeemed_at,
     createdAt: row.created_at,
+    handoverImageUrl: row.handover_image_url ?? null,
+    recipientName: row.recipient_name ?? null,
+    recipientPhone: row.recipient_phone ?? null,
+    recipientNote: row.recipient_note ?? null,
+    handoverDate: row.handover_date ?? null,
     userName: row.user_name,
     userMobileNumber: row.user_mobile_number,
   };
@@ -52,7 +62,9 @@ const COLS = `
   id, user_id, reward_id, idempotency_key,
   reward_code, reward_name, reward_image_url,
   points_spent, points_balance_after, status, admin_note,
-  processed_at, redeemed_at, created_at
+  processed_at, redeemed_at, created_at,
+  handover_image_url, recipient_name, recipient_phone,
+  recipient_note, handover_date
 `;
 
 export const rewardRedemptionRepository = {
@@ -159,6 +171,8 @@ export const rewardRedemptionRepository = {
                 rr.reward_code, rr.reward_name, rr.reward_image_url,
                 rr.points_spent, rr.points_balance_after, rr.status, rr.admin_note,
                 rr.processed_at, rr.redeemed_at, rr.created_at,
+                rr.handover_image_url, rr.recipient_name, rr.recipient_phone,
+                rr.recipient_note, rr.handover_date,
                 u.name AS user_name, u.mobile_number AS user_mobile_number
          FROM reward_redemptions rr
          LEFT JOIN users u ON u.id = rr.user_id
@@ -186,16 +200,37 @@ export const rewardRedemptionRepository = {
     id: string,
     status: RewardRedemptionStatus,
     adminNote: string | null,
-    client: Queryable
+    client: Queryable,
+    handover?: {
+      handoverImageUrl?: string | null;
+      recipientName?: string | null;
+      recipientPhone?: string | null;
+      recipientNote?: string | null;
+      handoverDate?: Date | null;
+    }
   ): Promise<IRewardRedemption | null> => {
     const result = await client.query<RewardRedemptionRow>(
       `UPDATE reward_redemptions
        SET status = $2,
            admin_note = $3,
-           processed_at = NOW()
+           processed_at = NOW(),
+           handover_image_url = COALESCE($4, handover_image_url),
+           recipient_name = COALESCE($5, recipient_name),
+           recipient_phone = COALESCE($6, recipient_phone),
+           recipient_note = COALESCE($7, recipient_note),
+           handover_date = COALESCE($8, handover_date)
        WHERE id = $1
        RETURNING ${COLS}`,
-      [id, status, adminNote]
+      [
+        id,
+        status,
+        adminNote,
+        handover?.handoverImageUrl ?? null,
+        handover?.recipientName ?? null,
+        handover?.recipientPhone ?? null,
+        handover?.recipientNote ?? null,
+        handover?.handoverDate ?? (status === 'gifted' ? new Date() : null),
+      ]
     );
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   },

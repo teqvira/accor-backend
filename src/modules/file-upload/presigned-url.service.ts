@@ -22,7 +22,7 @@ import { buildProfileUploadKey } from './profile-upload-key';
 export interface PresignedUploadInput {
   fileName: string;
   contentType: (typeof ALLOWED_IMAGE_TYPES)[number];
-  folder?: 'products' | 'rewards';
+  folder?: 'products' | 'rewards' | 'gifts';
 }
 
 export interface ProfilePresignedUploadInput {

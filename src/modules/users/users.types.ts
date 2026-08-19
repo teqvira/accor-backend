@@ -1,4 +1,4 @@
-import { UserRole, UserType } from '../auth/user.types';
+import { GarageRole, UserRole, UserType } from '../auth/user.types';
 
 export interface UserListFilters {
   role?: UserRole;
@@ -22,7 +22,11 @@ export interface CompleteProfileInput {
   dateOfBirth: string;
   city: string;
   state: string;
+  pincode: string;
   userType: UserType;
+  garageRole?: GarageRole;
+  garageName?: string;
+  garageOwnerName?: string;
   avatarUrl?: string;
   aadhaarUrl: string;
   panUrl: string;

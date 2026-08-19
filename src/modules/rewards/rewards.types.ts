@@ -59,9 +59,22 @@ export interface IRewardRedemption {
   processedAt: Date | null;
   redeemedAt: Date;
   createdAt: Date;
+  handoverImageUrl?: string | null;
+  recipientName?: string | null;
+  recipientPhone?: string | null;
+  recipientNote?: string | null;
+  handoverDate?: Date | null;
   /** Joined from users on admin listing */
   userName?: string | null;
   userMobileNumber?: string | null;
+}
+
+export interface GiftHandoverDetails {
+  handoverImageUrl?: string | null;
+  recipientName?: string | null;
+  recipientPhone?: string | null;
+  recipientNote?: string | null;
+  handoverDate?: Date | null;
 }
 
 export interface CreateRewardRedemptionData {

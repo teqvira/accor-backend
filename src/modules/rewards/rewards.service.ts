@@ -13,6 +13,7 @@ import { rewardRedemptionRepository } from './reward-redemption.repository';
 import { rewardTransactionRepository } from './reward-transaction.repository';
 import { REWARD_STORE_MILESTONES } from './rewards.constants';
 import {
+  GiftHandoverDetails,
   IRewardCatalogItem,
   IRewardRedemption,
   IRewardTransaction,
@@ -63,6 +64,11 @@ function sanitizeAdminRedemption(redemption: IRewardRedemption) {
     pointsBalanceAfter: redemption.pointsBalanceAfter,
     redeemedAt: redemption.redeemedAt,
     createdAt: redemption.createdAt,
+    handoverImageUrl: redemption.handoverImageUrl ?? null,
+    recipientName: redemption.recipientName ?? null,
+    recipientPhone: redemption.recipientPhone ?? null,
+    recipientNote: redemption.recipientNote ?? null,
+    handoverDate: redemption.handoverDate ?? null,
   };
 }
 
@@ -458,7 +464,8 @@ export class RewardsService {
   async updateRedemptionStatus(
     redemptionId: string,
     status: 'gifted' | 'rejected',
-    adminNote?: string | null
+    adminNote?: string | null,
+    handover?: GiftHandoverDetails
   ) {
     return withTransaction(async (client) => {
       const redemption = await rewardRedemptionRepository.findByIdForUpdate(
@@ -505,7 +512,16 @@ export class RewardsService {
         redemptionId,
         status,
         adminNote ?? null,
-        client
+        client,
+        status === 'gifted'
+          ? {
+              handoverImageUrl: handover?.handoverImageUrl,
+              recipientName: handover?.recipientName,
+              recipientPhone: handover?.recipientPhone,
+              recipientNote: handover?.recipientNote,
+              handoverDate: handover?.handoverDate ?? new Date(),
+            }
+          : undefined
       );
 
       if (!updated) {

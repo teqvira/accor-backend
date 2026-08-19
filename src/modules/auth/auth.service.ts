@@ -95,7 +95,12 @@ function sanitizeUser(user: IUser) {
       : undefined,
     city: user.city,
     state: user.state,
+    pincode: user.pincode,
     userType: user.userType,
+    garageId: user.garageId,
+    garageRole: user.garageRole,
+    garageName: user.garageName,
+    garageOwnerName: user.garageOwnerName,
     profileCompleted: user.profileCompleted,
     createdAt: user.createdAt,
   };

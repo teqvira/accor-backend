@@ -17,6 +17,7 @@ interface RedemptionTransactionRow {
   reward_points: number;
   campaign_id?: string | null;
   multiplier_applied?: string | number | null;
+  points_credited_to_user_id?: string | null;
   redeemed_at: Date;
   created_at: Date;
 }
@@ -34,6 +35,7 @@ export function mapRedemptionTransactionRow(
     rewardPoints: row.reward_points,
     campaignId: row.campaign_id ?? undefined,
     multiplierApplied: row.multiplier_applied ? Number(row.multiplier_applied) : undefined,
+    pointsCreditedToUserId: row.points_credited_to_user_id ?? undefined,
     redeemedAt: row.redeemed_at,
     createdAt: row.created_at,
   };
@@ -41,7 +43,7 @@ export function mapRedemptionTransactionRow(
 
 const TX_COLUMNS = `
   id, user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points,
-  campaign_id, multiplier_applied, redeemed_at, created_at
+  campaign_id, multiplier_applied, points_credited_to_user_id, redeemed_at, created_at
 `;
 
 export const redemptionTransactionRepository = {
@@ -52,8 +54,8 @@ export const redemptionTransactionRepository = {
     const db = client ?? pool;
     const result = await db.query<RedemptionTransactionRow>(
       `INSERT INTO redemption_transactions
-         (user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points, campaign_id, multiplier_applied, redeemed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()))
+         (user_id, qr_code_id, batch_id, product_id, wallet_amount, reward_points, campaign_id, multiplier_applied, points_credited_to_user_id, redeemed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, NOW()))
        RETURNING ${TX_COLUMNS}`,
       [
         data.userId,
@@ -64,6 +66,7 @@ export const redemptionTransactionRepository = {
         data.rewardPoints,
         data.campaignId ?? null,
         data.multiplierApplied ?? 1.0,
+        data.pointsCreditedToUserId ?? data.userId,
         data.redeemedAt ?? null,
       ]
     );

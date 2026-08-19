@@ -18,6 +18,10 @@ export const createCampaignSchema = z.object({
     .number()
     .min(1.0, 'Multiplier must be at least 1.0')
     .max(100, 'Multiplier must not exceed 100'),
+  pincodeScope: z.enum(['all', 'specific']).optional().default('all'),
+  pincode: emptyToUndefined(
+    z.string().trim().regex(/^[1-9]\d{5}$/, 'Pincode must be a valid 6-digit Indian pincode').optional()
+  ),
   startDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: 'Invalid start date format',
   }),
@@ -28,9 +32,21 @@ export const createCampaignSchema = z.object({
     .array(z.string().uuid('Invalid Batch ID'))
     .min(1, 'At least one batch/coupon must be selected'),
   active: z.boolean().optional().default(true),
-}).refine((data) => new Date(data.endDate) > new Date(data.startDate), {
-  message: 'End date must be after start date',
-  path: ['endDate'],
+}).superRefine((data, ctx) => {
+  if (new Date(data.endDate) <= new Date(data.startDate)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: 'End date must be after start date',
+    });
+  }
+  if (data.pincodeScope === 'specific' && !data.pincode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['pincode'],
+      message: 'Pincode is required when targeting a specific pincode',
+    });
+  }
 });
 
 export const updateCampaignSchema = z.object({
@@ -43,6 +59,10 @@ export const updateCampaignSchema = z.object({
       .min(1.0, 'Multiplier must be at least 1.0')
       .max(100, 'Multiplier must not exceed 100')
       .optional()
+  ),
+  pincodeScope: z.enum(['all', 'specific']).optional(),
+  pincode: emptyToUndefined(
+    z.string().trim().regex(/^[1-9]\d{5}$/, 'Pincode must be a valid 6-digit Indian pincode').nullable().optional()
   ),
   startDate: emptyToUndefined(
     z.string().refine((val) => !isNaN(Date.parse(val)), {
@@ -58,6 +78,14 @@ export const updateCampaignSchema = z.object({
     z.array(z.string().uuid('Invalid Batch ID')).min(1, 'At least one batch/coupon must be selected').optional()
   ),
   active: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.pincodeScope === 'specific' && !data.pincode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['pincode'],
+      message: 'Pincode is required when targeting a specific pincode',
+    });
+  }
 });
 
 export const listCampaignsQuerySchema = z.object({

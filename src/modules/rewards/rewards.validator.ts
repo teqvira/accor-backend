@@ -48,10 +48,44 @@ export const adminRedemptionListQuerySchema = z.object({
   search: z.string().trim().optional(),
 });
 
-export const updateRedemptionStatusSchema = z.object({
-  status: z.enum(['gifted', 'rejected']),
-  adminNote: z.string().trim().max(500).nullable().optional(),
-});
+export const updateRedemptionStatusSchema = z
+  .object({
+    status: z.enum(['gifted', 'rejected']),
+    adminNote: z.string().trim().max(500).nullable().optional(),
+    handoverImageUrl: z
+      .string()
+      .trim()
+      .url('Invalid handover image URL')
+      .nullable()
+      .optional(),
+    recipientName: z.string().trim().min(1).max(100).nullable().optional(),
+    recipientPhone: z
+      .string()
+      .trim()
+      .regex(/^[6-9]\d{9}$/, 'Recipient phone must be a valid 10-digit Indian number')
+      .nullable()
+      .optional(),
+    recipientNote: z.string().trim().max(500).nullable().optional(),
+    handoverDate: z.coerce.date().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.status !== 'gifted') return;
+
+    if (!data.handoverImageUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['handoverImageUrl'],
+        message: 'Handover image is required when marking a gift as redeemed',
+      });
+    }
+    if (!data.recipientName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['recipientName'],
+        message: 'Recipient name is required when marking a gift as redeemed',
+      });
+    }
+  });
 
 export const redeemRewardSchema = z.object({
   // Seeded catalog IDs (e.g. 11111111-0000-0000-0000-…) are valid Postgres UUIDs

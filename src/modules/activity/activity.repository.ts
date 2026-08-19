@@ -13,10 +13,11 @@ function buildFeedSql(scope: ActivityScope): {
   const includeReward = scope === 'all' || scope === 'rewards';
   const qrScopeFilter =
     scope === 'wallet'
-      ? 'AND rt.wallet_amount > 0'
+      ? 'AND rt.user_id = $1 AND rt.wallet_amount > 0'
       : scope === 'rewards'
-        ? 'AND rt.reward_points > 0'
-        : '';
+        ? `AND COALESCE(rt.points_credited_to_user_id, rt.user_id) = $1
+           AND rt.reward_points > 0`
+        : `AND (rt.user_id = $1 OR COALESCE(rt.points_credited_to_user_id, rt.user_id) = $1)`;
 
   const branches: string[] = [];
 
@@ -26,10 +27,18 @@ function buildFeedSql(scope: ActivityScope): {
         'qr_redemption'::text AS kind,
         rt.id AS id,
         rt.redeemed_at AS occurred_at,
-        rt.wallet_amount::numeric AS wallet_amount,
-        CASE WHEN rt.wallet_amount > 0 THEN 'credit' END::text AS wallet_direction,
-        rt.reward_points AS reward_points,
-        CASE WHEN rt.reward_points > 0 THEN 'credit' END::text AS reward_direction,
+        CASE WHEN rt.user_id = $1 THEN rt.wallet_amount ELSE 0 END::numeric AS wallet_amount,
+        CASE WHEN rt.user_id = $1 AND rt.wallet_amount > 0 THEN 'credit' END::text AS wallet_direction,
+        CASE
+          WHEN COALESCE(rt.points_credited_to_user_id, rt.user_id) = $1
+            THEN rt.reward_points
+          ELSE 0
+        END AS reward_points,
+        CASE
+          WHEN COALESCE(rt.points_credited_to_user_id, rt.user_id) = $1
+            AND rt.reward_points > 0
+            THEN 'credit'
+        END::text AS reward_direction,
         p.id AS product_id,
         p.name::text AS product_name,
         p.sku_code::text AS product_sku,
@@ -55,7 +64,7 @@ function buildFeedSql(scope: ActivityScope): {
       LEFT JOIN products p ON p.id = rt.product_id
       LEFT JOIN qr_batches b ON b.id = rt.batch_id
       LEFT JOIN qr_codes qc ON qc.id = rt.qr_code_id
-      WHERE rt.user_id = $1
+      WHERE (rt.user_id = $1 OR COALESCE(rt.points_credited_to_user_id, rt.user_id) = $1)
         ${qrScopeFilter}
     `);
   }

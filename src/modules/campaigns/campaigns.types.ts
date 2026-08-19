@@ -11,6 +11,8 @@ export interface ICampaign {
   name: string;
   productId: string;
   multiplier: number;
+  pincodeScope: 'all' | 'specific';
+  pincode?: string;
   startDate: Date;
   endDate: Date;
   active: boolean;
@@ -39,6 +41,8 @@ export interface CreateCampaignInput {
   campaignCode?: string;
   productId: string;
   multiplier: number;
+  pincodeScope?: 'all' | 'specific';
+  pincode?: string | null;
   startDate: string;
   endDate: string;
   batchIds: string[];
@@ -50,6 +54,8 @@ export interface UpdateCampaignInput {
   campaignCode?: string;
   productId?: string;
   multiplier?: number;
+  pincodeScope?: 'all' | 'specific';
+  pincode?: string | null;
   startDate?: string;
   endDate?: string;
   batchIds?: string[];
@@ -70,4 +76,6 @@ export interface ActiveCampaignMultiplier {
   campaignCode: string;
   campaignName: string;
   multiplier: number;
+  pincodeScope: 'all' | 'specific';
+  pincode?: string;
 }

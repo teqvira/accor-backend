@@ -15,6 +15,8 @@ interface CampaignRow {
   name: string;
   product_id: string;
   multiplier: string | number;
+  pincode_scope?: string | null;
+  pincode?: string | null;
   start_date: Date;
   end_date: Date;
   active: boolean;
@@ -102,6 +104,8 @@ function mapCampaignRow(row: CampaignRow): ICampaign {
     name: row.name,
     productId: row.product_id,
     multiplier: Number(row.multiplier),
+    pincodeScope: (row.pincode_scope === 'specific' ? 'specific' : 'all'),
+    pincode: row.pincode ?? undefined,
     startDate: row.start_date,
     endDate: row.end_date,
     active: row.active,
@@ -149,8 +153,8 @@ export const campaignsRepository = {
 
     const result = await db.query<CampaignRow>(
       `INSERT INTO campaigns
-         (campaign_code, name, product_id, multiplier, start_date, end_date, active, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (campaign_code, name, product_id, multiplier, start_date, end_date, active, created_by, pincode_scope, pincode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         data.campaignCode,
@@ -161,6 +165,8 @@ export const campaignsRepository = {
         parseEndDate(data.endDate),
         data.active ?? true,
         data.createdBy || null,
+        data.pincodeScope === 'specific' ? 'specific' : 'all',
+        data.pincodeScope === 'specific' ? data.pincode ?? null : null,
       ]
     );
 
@@ -355,6 +361,18 @@ export const campaignsRepository = {
       paramIdx++;
     }
 
+    if (data.pincodeScope !== undefined) {
+      setClauses.push(`pincode_scope = $${paramIdx}`);
+      queryParams.push(data.pincodeScope);
+      paramIdx++;
+    }
+
+    if (data.pincode !== undefined || data.pincodeScope === 'all') {
+      setClauses.push(`pincode = $${paramIdx}`);
+      queryParams.push(data.pincodeScope === 'all' ? null : data.pincode ?? null);
+      paramIdx++;
+    }
+
     if (data.startDate !== undefined) {
       setClauses.push(`start_date = $${paramIdx}`);
       queryParams.push(parseStartDate(data.startDate));
@@ -421,8 +439,10 @@ export const campaignsRepository = {
       campaign_code: string;
       name: string;
       multiplier: string | number;
+      pincode_scope: string | null;
+      pincode: string | null;
     }>(
-      `SELECT c.id, c.campaign_code, c.name, c.multiplier
+      `SELECT c.id, c.campaign_code, c.name, c.multiplier, c.pincode_scope, c.pincode
        FROM campaigns c
        JOIN campaign_batches cb ON cb.campaign_id = c.id
        WHERE cb.batch_id = $1
@@ -441,6 +461,9 @@ export const campaignsRepository = {
       campaignCode: result.rows[0].campaign_code,
       campaignName: result.rows[0].name,
       multiplier: Number(result.rows[0].multiplier),
+      pincodeScope:
+        result.rows[0].pincode_scope === 'specific' ? 'specific' : 'all',
+      pincode: result.rows[0].pincode ?? undefined,
     };
   },
 

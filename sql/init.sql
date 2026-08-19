@@ -20,3 +20,5 @@
 \i sql/migrations/020_notification_broadcast_fields.sql
 \i sql/migrations/021_otp_purpose_qr_redemption.sql
 \i sql/migrations/022_otp_purpose_withdrawal.sql
+\i sql/migrations/023_reward_gift_handover.sql
+\i sql/migrations/024_pincode_and_garage.sql

@@ -214,7 +214,8 @@ export const notificationRepository = {
 
     const result = await pool.query<RecipientRow>(
       `INSERT INTO notification_recipients (notification_id, user_id)
-       SELECT $1, unnest($2::uuid[])
+       SELECT $1::uuid, x.user_id::uuid
+       FROM unnest($2::text[]) AS x(user_id)
        ON CONFLICT (notification_id, user_id) DO NOTHING
        RETURNING id, notification_id, user_id, is_read, read_at,
                  push_status, push_error, pushed_at, created_at`,
@@ -231,9 +232,9 @@ export const notificationRepository = {
     if (recipientIds.length === 0) return;
     await pool.query(
       `UPDATE notification_recipients
-       SET push_status = $2,
+       SET push_status = $2::varchar(20),
            push_error = $3,
-           pushed_at = CASE WHEN $2 IN ('sent', 'failed', 'skipped') THEN NOW() ELSE pushed_at END
+           pushed_at = NOW()
        WHERE id = ANY($1::uuid[])`,
       [recipientIds, status, pushError ?? null]
     );

@@ -5,6 +5,7 @@ export enum UserRole {
 }
 
 export type UserType = 'mechanic' | 'dealer';
+export type GarageRole = 'owner' | 'worker';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface IUser {
@@ -24,6 +25,11 @@ export interface IUser {
   city?: string;
   state?: string;
   userType?: UserType;
+  pincode?: string;
+  garageId?: string;
+  garageRole?: GarageRole;
+  garageName?: string;
+  garageOwnerName?: string;
   profileCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -46,6 +52,11 @@ interface UserRow {
   city?: string | null;
   state?: string | null;
   user_type?: string | null;
+  pincode?: string | null;
+  garage_id?: string | null;
+  garage_role?: string | null;
+  garage_name?: string | null;
+  garage_owner_name?: string | null;
   profile_completed?: boolean | null;
   created_at: Date;
   updated_at: Date;
@@ -69,6 +80,11 @@ export function mapUserRow(row: UserRow): IUser {
     city: row.city ?? undefined,
     state: row.state ?? undefined,
     userType: (row.user_type as UserType | null) ?? undefined,
+    pincode: row.pincode ?? undefined,
+    garageId: row.garage_id ?? undefined,
+    garageRole: (row.garage_role as GarageRole | null) ?? undefined,
+    garageName: row.garage_name ?? undefined,
+    garageOwnerName: row.garage_owner_name ?? undefined,
     profileCompleted: Boolean(row.profile_completed),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -86,6 +102,11 @@ export interface CreateUserData {
   city?: string;
   state?: string;
   userType?: UserType;
+  pincode?: string;
+  garageId?: string;
+  garageRole?: GarageRole;
+  garageName?: string;
+  garageOwnerName?: string;
   profileCompleted?: boolean;
 }
 
@@ -103,5 +124,10 @@ export interface UpdateUserData {
   city?: string | null;
   state?: string | null;
   userType?: UserType | null;
+  pincode?: string | null;
+  garageId?: string | null;
+  garageRole?: GarageRole | null;
+  garageName?: string | null;
+  garageOwnerName?: string | null;
   profileCompleted?: boolean;
 }

@@ -15,6 +15,7 @@ import {
   CreateCampaignInput,
   ICampaign,
   UpdateCampaignInput,
+  ActiveCampaignMultiplier,
 } from './campaigns.types';
 
 function generateCampaignCode(): string {
@@ -159,6 +160,28 @@ export class CampaignsService {
 
   async getActiveMultiplierForBatch(batchId: string) {
     return campaignsRepository.findActiveCampaignForBatch(batchId);
+  }
+
+  /** Returns the active campaign only if the user's pincode is eligible. */
+  isEligibleForPincode(
+    campaign: ActiveCampaignMultiplier,
+    userPincode?: string | null
+  ): boolean {
+    if (campaign.pincodeScope !== 'specific') return true;
+    const targeted = campaign.pincode?.trim();
+    const actual = userPincode?.trim();
+    if (!targeted || !actual) return false;
+    return targeted === actual;
+  }
+
+  async getEligibleCampaignForBatch(
+    batchId: string,
+    userPincode?: string | null
+  ) {
+    const campaign = await this.getActiveMultiplierForBatch(batchId);
+    if (!campaign) return null;
+    if (!this.isEligibleForPincode(campaign, userPincode)) return null;
+    return campaign;
   }
 
   async getCampaignStats() {

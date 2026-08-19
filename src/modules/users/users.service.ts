@@ -50,7 +50,12 @@ function sanitizeUser(user: IUser) {
     dateOfBirth: formatDate(user.dateOfBirth),
     city: user.city,
     state: user.state,
+    pincode: user.pincode,
     userType: user.userType,
+    garageId: user.garageId,
+    garageRole: user.garageRole,
+    garageName: user.garageName,
+    garageOwnerName: user.garageOwnerName,
     profileCompleted: user.profileCompleted,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -158,13 +163,38 @@ export class UsersService {
     }
 
     try {
+      const isMechanic = input.userType === 'mechanic';
+      let garageId: string | null = null;
+      if (isMechanic && input.garageRole === 'owner' && input.garageName) {
+        garageId = await userRepository.upsertOwnerGarage(
+          userId,
+          input.garageName.trim()
+        );
+      } else if (isMechanic && input.garageRole === 'worker') {
+        const owner = await userRepository.findGarageOwnerForWorker({
+          ...existing,
+          garageRole: 'worker',
+          garageName: input.garageName?.trim(),
+          garageOwnerName: input.garageOwnerName?.trim(),
+        });
+        garageId = owner?.garageId ?? null;
+      }
+
       const updated = await userRepository.update(userId, {
         name: input.name.trim(),
         email: input.email.trim().toLowerCase(),
         dateOfBirth: input.dateOfBirth,
         city: input.city.trim(),
         state: input.state.trim(),
+        pincode: input.pincode.trim(),
         userType: input.userType,
+        garageId,
+        garageRole: isMechanic ? input.garageRole ?? null : null,
+        garageName: isMechanic ? input.garageName?.trim() ?? null : null,
+        garageOwnerName:
+          isMechanic && input.garageRole === 'worker'
+            ? input.garageOwnerName?.trim() ?? null
+            : null,
         avatarUrl: input.avatarUrl,
         profileCompleted: true,
       });

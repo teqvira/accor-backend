@@ -35,8 +35,52 @@ function maskMobile(mobileNumber: string): string {
   return `${mobileNumber.slice(0, 2)}******${mobileNumber.slice(-2)}`;
 }
 
+function campaignPayload(
+  campaign: Awaited<
+    ReturnType<typeof campaignsService.getEligibleCampaignForBatch>
+  >
+) {
+  if (!campaign) return null;
+  return {
+    id: campaign.campaignId,
+    code: campaign.campaignCode,
+    name: campaign.campaignName,
+    multiplier: campaign.multiplier,
+  };
+}
+
+async function resolvePointsRecipient(
+  scanner: NonNullable<Awaited<ReturnType<typeof userRepository.findById>>>,
+  client?: Parameters<typeof userRepository.findGarageOwnerForWorker>[1]
+) {
+  if (scanner.garageRole !== 'worker') {
+    return {
+      userId: scanner._id,
+      name: scanner.name ?? 'You',
+      isScanner: true as const,
+    };
+  }
+
+  const owner = await userRepository.findGarageOwnerForWorker(scanner, client);
+  if (!owner) {
+    return {
+      userId: scanner._id,
+      name: scanner.garageOwnerName || scanner.name || 'You',
+      isScanner: true as const,
+      ownerUnresolved: true,
+    };
+  }
+
+  return {
+    userId: owner._id,
+    name: owner.name || scanner.garageOwnerName || 'Garage owner',
+    isScanner: false as const,
+    garageId: owner.garageId ?? scanner.garageId,
+  };
+}
+
 export class RedemptionService {
-  async validateCode(code: string) {
+  async validateCode(code: string, userId?: string) {
     const qrCode = await qrCodeRepository.findByCode(code);
     if (!qrCode) {
       throw new NotFoundError(
@@ -71,13 +115,23 @@ export class RedemptionService {
       );
     }
 
-    const activeCampaign =
-      await campaignsService.getActiveMultiplierForBatch(batch._id);
+    const scanner = userId ? await userRepository.findById(userId) : null;
+    const activeCampaign = await campaignsService.getEligibleCampaignForBatch(
+      batch._id,
+      scanner?.pincode
+    );
     const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
     const effectiveWalletAmount = Number(
       (batch.walletAmount * multiplier).toFixed(2)
     );
     const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+    const pointsRecipient = scanner
+      ? await resolvePointsRecipient(scanner)
+      : {
+          userId: userId ?? '',
+          name: 'You',
+          isScanner: true,
+        };
 
     return {
       code: qrCode.code,
@@ -96,14 +150,14 @@ export class RedemptionService {
         walletAmount: effectiveWalletAmount,
         rewardPoints: effectiveRewardPoints,
       },
-      campaign: activeCampaign
-        ? {
-            id: activeCampaign.campaignId,
-            code: activeCampaign.campaignCode,
-            name: activeCampaign.campaignName,
-            multiplier: activeCampaign.multiplier,
-          }
-        : null,
+      campaign: campaignPayload(activeCampaign),
+      allocation: {
+        cashTo: 'self',
+        pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
+        pointsRecipientName: pointsRecipient.isScanner
+          ? null
+          : pointsRecipient.name,
+      },
       redeemable: true,
     };
   }
@@ -111,7 +165,7 @@ export class RedemptionService {
   /** Validate QR is redeemable, then send OTP to the mechanic's mobile. */
   async sendRedemptionOtp(userId: string, code: string) {
     await assertMechanicForQr(userId);
-    await this.validateCode(code);
+    await this.validateCode(code, userId);
 
     const user = await userRepository.findById(userId);
     if (!user?.mobileNumber) {
@@ -251,13 +305,34 @@ export class RedemptionService {
         );
       }
 
-      const activeCampaign =
-        await campaignsService.getActiveMultiplierForBatch(batch._id);
+      const scanner = await userRepository.findById(userId, { client });
+      if (!scanner) {
+        throw new NotFoundError('User not found', `redeem: userId=${userId}`);
+      }
+
+      const activeCampaign = await campaignsService.getEligibleCampaignForBatch(
+        batch._id,
+        scanner.pincode
+      );
       const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
       const effectiveWalletAmount = Number(
         (batch.walletAmount * multiplier).toFixed(2)
       );
       const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+      const pointsRecipient = await resolvePointsRecipient(scanner, client);
+
+      if (
+        scanner.garageRole === 'worker' &&
+        !pointsRecipient.isScanner &&
+        pointsRecipient.garageId &&
+        !scanner.garageId
+      ) {
+        await userRepository.update(
+          scanner._id,
+          { garageId: pointsRecipient.garageId },
+          { client }
+        );
+      }
 
       const updatedQr = await qrCodeRepository.markRedeemedByCode(
         code,
@@ -275,6 +350,9 @@ export class RedemptionService {
       const remarkText = activeCampaign
         ? `QR redemption: ${code} (${activeCampaign.campaignName} - ${multiplier}x)`
         : `QR redemption: ${code}`;
+      const pointsRemark = pointsRecipient.isScanner
+        ? remarkText
+        : `${remarkText} (from worker ${scanner.name ?? scanner.mobileNumber})`;
 
       const walletTx = await walletService.creditInSession(
         updatedQr.redeemedBy!,
@@ -286,10 +364,10 @@ export class RedemptionService {
       );
 
       await rewardsService.creditInSession(
-        updatedQr.redeemedBy!,
+        pointsRecipient.userId,
         effectiveRewardPoints,
         updatedQr._id,
-        remarkText,
+        pointsRemark,
         client,
         'qr_redemption'
       );
@@ -304,6 +382,7 @@ export class RedemptionService {
           rewardPoints: effectiveRewardPoints,
           campaignId: activeCampaign?.campaignId,
           multiplierApplied: multiplier,
+          pointsCreditedToUserId: pointsRecipient.userId,
           redeemedAt: updatedQr.redeemedAt,
         },
         client
@@ -325,6 +404,13 @@ export class RedemptionService {
                   multiplier,
                 }
               : null,
+            allocation: {
+              cashTo: 'self',
+              pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
+              pointsRecipientName: pointsRecipient.isScanner
+                ? null
+                : pointsRecipient.name,
+            },
             redeemedAt: updatedQr.redeemedAt,
           },
         },

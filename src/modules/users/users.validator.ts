@@ -45,17 +45,53 @@ export const updateUserSchema = z
     message: 'At least one field is required',
   });
 
-export const completeProfileSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  email: z.string().trim().email(),
-  dateOfBirth: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD'),
-  city: z.string().trim().min(2).max(100),
-  state: z.string().trim().min(2).max(100),
-  userType: z.enum(['mechanic', 'dealer']),
-  avatarUrl: z.string().trim().url().optional(),
-  aadhaarUrl: z.string().trim().url(),
-  panUrl: z.string().trim().url(),
-});
+const PINCODE_REGEX = /^[1-9]\d{5}$/;
+const pincodeSchema = z
+  .string()
+  .trim()
+  .regex(PINCODE_REGEX, 'Pincode must be a valid 6-digit Indian pincode');
+
+export const completeProfileSchema = z
+  .object({
+    name: z.string().trim().min(2).max(100),
+    email: z.string().trim().email(),
+    dateOfBirth: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD'),
+    city: z.string().trim().min(2).max(100),
+    state: z.string().trim().min(2).max(100),
+    pincode: pincodeSchema,
+    userType: z.enum(['mechanic', 'dealer']),
+    garageRole: z.enum(['owner', 'worker']).optional(),
+    garageName: z.string().trim().min(2).max(255).optional(),
+    garageOwnerName: z.string().trim().min(2).max(100).optional(),
+    avatarUrl: z.string().trim().url().optional(),
+    aadhaarUrl: z.string().trim().url(),
+    panUrl: z.string().trim().url(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.userType !== 'mechanic') return;
+
+    if (!data.garageRole) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['garageRole'],
+        message: 'Select Garage Owner or Worker',
+      });
+    }
+    if (!data.garageName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['garageName'],
+        message: 'Garage name is required',
+      });
+    }
+    if (data.garageRole === 'worker' && !data.garageOwnerName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['garageOwnerName'],
+        message: 'Garage owner name is required for workers',
+      });
+    }
+  });

@@ -16,6 +16,7 @@ const USER_PUBLIC_COLUMNS = `
   id, name, email, mobile_number, wallet_balance, reward_points,
   role, is_active, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
+  pincode, garage_id, garage_role, garage_name, garage_owner_name,
   created_at, updated_at
 `;
 
@@ -23,6 +24,7 @@ const USER_COLUMNS_WITH_PASSWORD = `
   id, name, email, mobile_number, password_hash, wallet_balance, reward_points,
   role, is_active, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
+  pincode, garage_id, garage_role, garage_name, garage_owner_name,
   created_at, updated_at
 `;
 
@@ -71,6 +73,7 @@ const PARTNER_SELECT = `
   u.id, u.name, u.email, u.mobile_number, u.wallet_balance, u.reward_points,
   u.role, u.is_active, u.is_verified, u.approval_status,
   u.avatar_url, u.date_of_birth, u.city, u.state, u.user_type, u.profile_completed,
+  u.pincode, u.garage_id, u.garage_role, u.garage_name, u.garage_owner_name,
   u.created_at, u.updated_at,
   COUNT(DISTINCT rt.id)::text AS qr_scan_count,
   COALESCE(SUM(rt.wallet_amount), 0)::text AS rewards_earned,
@@ -158,7 +161,12 @@ export const userRepository = {
     return mapUserRow(result.rows[0]);
   },
 
-  update: async (id: string, data: UpdateUserData): Promise<IUser | null> => {
+  update: async (
+    id: string,
+    data: UpdateUserData,
+    options?: { client?: Queryable }
+  ): Promise<IUser | null> => {
+    const db = options?.client ?? pool;
     const sets: string[] = [];
     const values: unknown[] = [id];
     let paramIndex = 2;
@@ -215,16 +223,36 @@ export const userRepository = {
       sets.push(`user_type = $${paramIndex++}`);
       values.push(data.userType);
     }
+    if (data.pincode !== undefined) {
+      sets.push(`pincode = $${paramIndex++}`);
+      values.push(data.pincode);
+    }
+    if (data.garageId !== undefined) {
+      sets.push(`garage_id = $${paramIndex++}`);
+      values.push(data.garageId);
+    }
+    if (data.garageRole !== undefined) {
+      sets.push(`garage_role = $${paramIndex++}`);
+      values.push(data.garageRole);
+    }
+    if (data.garageName !== undefined) {
+      sets.push(`garage_name = $${paramIndex++}`);
+      values.push(data.garageName);
+    }
+    if (data.garageOwnerName !== undefined) {
+      sets.push(`garage_owner_name = $${paramIndex++}`);
+      values.push(data.garageOwnerName);
+    }
     if (data.profileCompleted !== undefined) {
       sets.push(`profile_completed = $${paramIndex++}`);
       values.push(data.profileCompleted);
     }
 
     if (sets.length === 0) {
-      return userRepository.findById(id);
+      return userRepository.findById(id, { client: options?.client });
     }
 
-    const result = await pool.query<UserRow>(
+    const result = await db.query<UserRow>(
       `UPDATE users SET ${sets.join(', ')}, updated_at = NOW()
        WHERE id = $1
        RETURNING ${USER_PUBLIC_COLUMNS}`,
@@ -450,5 +478,65 @@ export const userRepository = {
       [id, walletDelta, pointsDelta]
     );
     return mapOptionalRow(result.rows[0]);
+  },
+
+  upsertOwnerGarage: async (
+    ownerId: string,
+    name: string,
+    client?: Queryable
+  ): Promise<string> => {
+    const db = client ?? pool;
+    const existing = await db.query<{ id: string }>(
+      `SELECT id FROM garages WHERE owner_id = $1`,
+      [ownerId]
+    );
+    if (existing.rows[0]) {
+      await db.query(
+        `UPDATE garages SET name = $2, updated_at = NOW() WHERE owner_id = $1`,
+        [ownerId, name]
+      );
+      return existing.rows[0].id;
+    }
+    const inserted = await db.query<{ id: string }>(
+      `INSERT INTO garages (name, owner_id) VALUES ($1, $2) RETURNING id`,
+      [name, ownerId]
+    );
+    return inserted.rows[0].id;
+  },
+
+  findGarageOwnerForWorker: async (
+    worker: IUser,
+    client?: Queryable
+  ): Promise<IUser | null> => {
+    const db = client ?? pool;
+    if (worker.garageRole !== 'worker') return null;
+
+    if (worker.garageId) {
+      const byGarage = await db.query<UserRow>(
+        `SELECT ${USER_PUBLIC_COLUMNS}
+         FROM users
+         WHERE id = (SELECT owner_id FROM garages WHERE id = $1)
+         LIMIT 1`,
+        [worker.garageId]
+      );
+      if (byGarage.rows[0]) return mapUserRow(byGarage.rows[0]);
+    }
+
+    const garageName = worker.garageName?.trim();
+    const ownerName = worker.garageOwnerName?.trim();
+    if (!garageName || !ownerName) return null;
+
+    const byName = await db.query<UserRow>(
+      `SELECT ${USER_PUBLIC_COLUMNS}
+       FROM users
+       WHERE role = 'user'
+         AND garage_role = 'owner'
+         AND LOWER(TRIM(garage_name)) = LOWER(TRIM($1))
+         AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [garageName, ownerName]
+    );
+    return mapOptionalRow(byName.rows[0]);
   },
 };

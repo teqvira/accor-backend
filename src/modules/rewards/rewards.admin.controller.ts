@@ -54,7 +54,16 @@ export class RewardsAdminController {
     const result = await rewardsService.updateRedemptionStatus(
       getParam(req.params.redemptionId),
       req.body.status,
-      req.body.adminNote
+      req.body.adminNote,
+      req.body.status === 'gifted'
+        ? {
+            handoverImageUrl: req.body.handoverImageUrl,
+            recipientName: req.body.recipientName,
+            recipientPhone: req.body.recipientPhone,
+            recipientNote: req.body.recipientNote,
+            handoverDate: req.body.handoverDate,
+          }
+        : undefined
     );
     const message =
       req.body.status === 'gifted'

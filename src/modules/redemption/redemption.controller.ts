@@ -6,7 +6,10 @@ import { redemptionService } from './redemption.service';
 
 export class RedemptionController {
   async validate(req: AuthRequest, res: Response): Promise<void> {
-    const result = await redemptionService.validateCode(getParam(req.params.code));
+    const result = await redemptionService.validateCode(
+      getParam(req.params.code),
+      req.user?.sub
+    );
     sendSuccess(res, 'QR code is valid for redemption', result);
   }
 

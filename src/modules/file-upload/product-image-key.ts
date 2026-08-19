@@ -19,7 +19,7 @@ export function buildRewardImageKey(fileName: string): string {
 
 export function buildUploadImageKey(
   fileName: string,
-  folder: 'products' | 'rewards' = 'products'
+  folder: 'products' | 'rewards' | 'gifts' = 'products'
 ): string {
   const ext = path.extname(fileName).toLowerCase();
   const baseName = path.basename(fileName, ext);
@@ -58,6 +58,7 @@ export function isOwnBucketObjectUrl(url: string): boolean {
       (parsed.hostname === bucketHost || parsed.hostname === legacyHost) &&
       (pathName.startsWith('/products/') ||
         pathName.startsWith('/rewards/') ||
+        pathName.startsWith('/gifts/') ||
         pathName.startsWith(`/${PARTNER_DOCUMENT_PREFIX}`) ||
         pathName.startsWith('/users/'))
     );
