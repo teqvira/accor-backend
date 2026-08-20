@@ -53,7 +53,7 @@ function pdfGridForShape(shape: QrLabelShape): {
   if (shape === 'square') {
     return { cols: 4, rows: 8, gapX: 10, gapY: 10 };
   }
-  return { cols: 6, rows: 8, gapX: 10, gapY: 10 };
+  return { cols: 8, rows: 10, gapX: 10, gapY: 10 };
 }
 
 async function streamPdfExport(
