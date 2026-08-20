@@ -154,16 +154,29 @@ export class WalletService {
   }
 
   async getAdminKpis() {
-    const [razorpayInfo, totalWithdrawn, totalUserWalletBalance, totalScansCount] =
-      await Promise.all([
-        razorpayPayoutService.getAccountBalance(),
-        walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
-        walletTransactionRepository.sumAllUserWalletBalances(),
-        walletTransactionRepository.countTotalScans(),
-      ]);
+    const [
+      razorpayInfo,
+      razorpayUnsettled,
+      dbPendingTopups,
+      totalWithdrawn,
+      totalUserWalletBalance,
+      totalScansCount,
+    ] = await Promise.all([
+      razorpayPayoutService.getAccountBalance(),
+      razorpayPayoutService.getUnsettledBalance(),
+      walletTransactionRepository.sumPendingAdminTopups(),
+      walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
+      walletTransactionRepository.sumAllUserWalletBalances(),
+      walletTransactionRepository.countTotalScans(),
+    ]);
+
+    // Use Razorpay live unsettled balance if available, otherwise DB recorded pending topups
+    const unsettledBalance =
+      razorpayUnsettled > 0 ? razorpayUnsettled : dbPendingTopups;
 
     return {
       razorpayBalance: razorpayInfo.balance,
+      unsettledBalance,
       totalWithdrawn,
       totalUserWalletBalance,
       totalScansCount,
@@ -259,12 +272,15 @@ export class WalletService {
     };
   }
 
-  async verifyPayment(payload: {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-    amount?: number;
-  }) {
+  async verifyPayment(
+    payload: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+      amount?: number;
+    },
+    adminId?: string
+  ) {
     if (env.RAZORPAY_KEY_SECRET && !payload.razorpay_order_id.startsWith('order_mock_')) {
       const generatedSignature = crypto
         .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
@@ -279,14 +295,36 @@ export class WalletService {
       }
     }
 
+    const grossAmount = payload.amount ? Number(payload.amount) : 0;
+    // Standard 2% gateway processing fee estimate for net settlement
+    const netAmount = Number((grossAmount * 0.98).toFixed(2));
+    const settlementDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // T+2 days
+
+    if (grossAmount > 0) {
+      await walletTransactionRepository.recordAdminTopup({
+        adminId,
+        orderId: payload.razorpay_order_id,
+        paymentId: payload.razorpay_payment_id,
+        amount: grossAmount,
+        netAmount,
+        status: 'pending_settlement',
+        settlementDate,
+      });
+    }
+
     return {
       verified: true,
       orderId: payload.razorpay_order_id,
       paymentId: payload.razorpay_payment_id,
+      amount: grossAmount,
+      netAmount,
+      status: 'pending_settlement',
+      settlementDate: settlementDate.toISOString().slice(0, 10),
     };
   }
 }
 
 export const walletService = new WalletService();
+
 
 

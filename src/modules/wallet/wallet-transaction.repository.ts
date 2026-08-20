@@ -277,5 +277,40 @@ export const walletTransactionRepository = {
       total: Number(countResult.rows[0]?.count ?? 0),
     };
   },
+
+  recordAdminTopup: async (data: {
+    adminId?: string;
+    orderId: string;
+    paymentId?: string;
+    amount: number;
+    netAmount: number;
+    status?: string;
+    settlementDate?: Date;
+  }): Promise<void> => {
+    await pool.query(
+      `INSERT INTO admin_wallet_topups
+         (admin_id, order_id, payment_id, amount, net_amount, status, settlement_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        data.adminId ?? null,
+        data.orderId,
+        data.paymentId ?? null,
+        data.amount,
+        data.netAmount,
+        data.status ?? 'pending_settlement',
+        data.settlementDate ?? null,
+      ]
+    );
+  },
+
+  sumPendingAdminTopups: async (): Promise<number> => {
+    const result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(net_amount), 0)::text AS total
+       FROM admin_wallet_topups
+       WHERE status = 'pending_settlement'`
+    );
+    return Number(result.rows[0]?.total ?? 0);
+  },
 };
+
 
