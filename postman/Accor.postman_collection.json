@@ -1,0 +1,411 @@
+{
+  "info": {
+    "name": "Accor — New & Updated APIs",
+    "description": "Pincode targeting, garage owner/worker registration, QR cash/points split, gift handover, and gifts/ S3 uploads.\n\nImport this one file in Postman. Tokens are saved on the collection.\n1. Set adminEmail / adminPassword on the collection variables\n2. Run Admin login\n3. For user APIs: send OTP, set userOtp, run Verify mobile OTP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://api.accorlubes.com" },
+    { "key": "adminEmail", "value": "admin@example.com" },
+    { "key": "adminPassword", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userMobile", "value": "9999999999" },
+    { "key": "userOtp", "value": "" },
+    { "key": "userToken", "value": "" },
+    { "key": "redemptionId", "value": "" },
+    { "key": "campaignId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "batchId", "value": "" },
+    { "key": "qrCode", "value": "" },
+    { "key": "handoverImageUrl", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const token = json.data && json.data.accessToken;",
+                  "if (token) pm.collectionVariables.set('adminToken', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Send mobile OTP (user)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"{{userMobile}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/send-mobile-otp"
+          }
+        },
+        {
+          "name": "Verify mobile OTP (user)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const token = json.data && json.data.accessToken;",
+                  "if (token) pm.collectionVariables.set('userToken', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"{{userMobile}}\",\n  \"otp\": \"{{userOtp}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/verify-mobile-otp"
+          }
+        }
+      ]
+    },
+    {
+      "name": "User profile (pincode + garage)",
+      "item": [
+        {
+          "name": "GET /users/me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "Complete profile — dealer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Dealer\",\n  \"email\": \"dealer@example.com\",\n  \"dateOfBirth\": \"1990-01-15\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"400001\",\n  \"userType\": \"dealer\",\n  \"aadhaarUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-aadhaar.jpg\",\n  \"panUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-pan.jpg\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "Complete profile — garage owner",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Garage Owner\",\n  \"email\": \"owner@example.com\",\n  \"dateOfBirth\": \"1985-03-20\",\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"411001\",\n  \"userType\": \"mechanic\",\n  \"garageRole\": \"owner\",\n  \"garageName\": \"Accor Service Centre\",\n  \"aadhaarUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-aadhaar.jpg\",\n  \"panUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-pan.jpg\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "Complete profile — garage worker",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Garage Worker\",\n  \"email\": \"worker@example.com\",\n  \"dateOfBirth\": \"1998-07-08\",\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"411001\",\n  \"userType\": \"mechanic\",\n  \"garageRole\": \"worker\",\n  \"garageName\": \"Accor Service Centre\",\n  \"garageOwnerName\": \"Garage Owner\",\n  \"aadhaarUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-aadhaar.jpg\",\n  \"panUrl\": \"https://accor-images.s3.ap-south-1.amazonaws.com/users/replace-pan.jpg\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "QR scan (pincode campaign + owner/worker split)",
+      "item": [
+        {
+          "name": "Validate QR (logged-in user pincode applied)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/redemption/validate/{{qrCode}}"
+          }
+        },
+        {
+          "name": "Send redemption OTP",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{qrCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/redemption/send-otp"
+          }
+        },
+        {
+          "name": "Verify redemption OTP",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{qrCode}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/redemption/verify-otp"
+          }
+        },
+        {
+          "name": "Redeem QR",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{qrCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/redemption/redeem"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns (pincode targeting)",
+      "item": [
+        {
+          "name": "List campaigns",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/campaigns?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Create campaign — all pincodes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"All India bonus\",\n  \"productId\": \"{{productId}}\",\n  \"multiplier\": 2,\n  \"pincodeScope\": \"all\",\n  \"startDate\": \"2026-08-01T00:00:00.000Z\",\n  \"endDate\": \"2026-12-31T23:59:59.000Z\",\n  \"batchIds\": [\"{{batchId}}\"],\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/campaigns"
+          }
+        },
+        {
+          "name": "Create campaign — specific pincode",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pune 411001 bonus\",\n  \"productId\": \"{{productId}}\",\n  \"multiplier\": 2,\n  \"pincodeScope\": \"specific\",\n  \"pincode\": \"411001\",\n  \"startDate\": \"2026-08-01T00:00:00.000Z\",\n  \"endDate\": \"2026-12-31T23:59:59.000Z\",\n  \"batchIds\": [\"{{batchId}}\"],\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/campaigns"
+          }
+        },
+        {
+          "name": "Update campaign pincode",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pincodeScope\": \"specific\",\n  \"pincode\": \"400001\"\n}"
+            },
+            "url": "{{baseUrl}}/api/campaigns/{{campaignId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gift handover",
+      "item": [
+        {
+          "name": "Presigned URL — gifts folder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const url = json.data && json.data.imageUrl;",
+                  "if (url) pm.collectionVariables.set('handoverImageUrl', url);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"handover.jpg\",\n  \"contentType\": \"image/jpeg\",\n  \"folder\": \"gifts\"\n}"
+            },
+            "url": "{{baseUrl}}/api/upload/presigned-url"
+          }
+        },
+        {
+          "name": "List pending redemptions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data.items && json.data.items[0];",
+                  "if (item && item.id) pm.collectionVariables.set('redemptionId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/rewards/redemptions?page=1&limit=20&status=pending"
+          }
+        },
+        {
+          "name": "Mark gift as redeemed (handover)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"gifted\",\n  \"handoverImageUrl\": \"{{handoverImageUrl}}\",\n  \"recipientName\": \"QA Mechanic\",\n  \"recipientPhone\": \"9999999999\",\n  \"recipientNote\": \"Handed over at garage\",\n  \"handoverDate\": \"2026-08-19T10:00:00.000Z\"\n}"
+            },
+            "url": "{{baseUrl}}/api/rewards/redemptions/{{redemptionId}}"
+          }
+        },
+        {
+          "name": "Reject redemption",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"rejected\",\n  \"adminNote\": \"Invalid request\"\n}"
+            },
+            "url": "{{baseUrl}}/api/rewards/redemptions/{{redemptionId}}"
+          }
+        },
+        {
+          "name": "List gifted redemptions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/rewards/redemptions?page=1&limit=20&status=gifted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partners (pincode + garage fields)",
+      "item": [
+        {
+          "name": "List approved partners",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/partners?page=1&limit=20&approvalStatus=approved"
+          }
+        },
+        {
+          "name": "Get partner by id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/partners/ed3dc57c-eaab-490a-867c-dcb8743b99d0"
+          }
+        }
+      ]
+    }
+  ]
+}
