@@ -69,14 +69,18 @@ function mapPartnerRow(row: PartnerListRow): PartnerListItem {
   };
 }
 
-const PARTNER_SELECT = `
+const PARTNER_USER_COLUMNS = `
   u.id, u.name, u.email, u.mobile_number, u.wallet_balance, u.reward_points,
   u.role, u.is_active, u.is_verified, u.approval_status,
   u.avatar_url, u.date_of_birth, u.city, u.state, u.user_type, u.profile_completed,
   u.pincode, u.garage_id, u.garage_role, u.garage_name, u.garage_owner_name,
-  u.created_at, u.updated_at,
-  COUNT(DISTINCT rt.id)::text AS qr_scan_count,
-  COALESCE(SUM(rt.wallet_amount), 0)::text AS rewards_earned,
+  u.created_at, u.updated_at
+`;
+
+const PARTNER_SELECT = `
+  ${PARTNER_USER_COLUMNS},
+  COALESCE(scans.qr_scan_count, '0') AS qr_scan_count,
+  COALESCE(scans.rewards_earned, '0') AS rewards_earned,
   COALESCE((
     SELECT SUM(w.amount) FROM withdrawals w
     WHERE w.user_id = u.id AND w.status = 'success'
@@ -91,6 +95,16 @@ const PARTNER_SELECT = `
     WHERE ud.user_id = u.id AND ud.document_type = 'pan'
     ORDER BY ud.created_at DESC LIMIT 1
   ) AS pan_url
+`;
+
+const PARTNER_SCAN_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*)::text AS qr_scan_count,
+      COALESCE(SUM(rt.wallet_amount), 0)::text AS rewards_earned
+    FROM redemption_transactions rt
+    WHERE rt.user_id = u.id
+  ) scans ON true
 `;
 
 export const userRepository = {
@@ -373,12 +387,14 @@ export const userRepository = {
     const [itemsResult, countResult] = await Promise.all([
       pool.query<PartnerListRow>(
         `SELECT ${PARTNER_SELECT}
-         FROM users u
-         LEFT JOIN redemption_transactions rt ON rt.user_id = u.id
-         ${where}
-         GROUP BY u.id
-         ORDER BY u.created_at DESC
-         LIMIT $${i++} OFFSET $${i}`,
+         FROM (
+           SELECT ${PARTNER_USER_COLUMNS}
+           FROM users u
+           ${where}
+           ORDER BY u.created_at DESC
+           LIMIT $${i++} OFFSET $${i}
+         ) u
+         ${PARTNER_SCAN_LATERAL}`,
         [...values, limit, offset]
       ),
       pool.query<{ count: string }>(
@@ -397,9 +413,8 @@ export const userRepository = {
     const result = await pool.query<PartnerListRow>(
       `SELECT ${PARTNER_SELECT}
        FROM users u
-       LEFT JOIN redemption_transactions rt ON rt.user_id = u.id
-       WHERE u.id = $1 AND u.role = 'user'
-       GROUP BY u.id`,
+       ${PARTNER_SCAN_LATERAL}
+       WHERE u.id = $1 AND u.role = 'user'`,
       [id]
     );
     return result.rows[0] ? mapPartnerRow(result.rows[0]) : null;

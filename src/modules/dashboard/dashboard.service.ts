@@ -32,26 +32,21 @@ export class DashboardService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
 
-    const [
-      totalPartners,
-      pendingApprovals,
-      totalQrGenerated,
-      rewardAmountDistributed,
-      rewardPointsIssued,
-      pendingPartners,
-      scanRaw,
-    ] = await Promise.all([
-      dashboardRepository.countActivePartners(),
-      dashboardRepository.countPendingApprovals(),
-      qrCodeRepository.count(),
-      walletTransactionRepository.sumCredits(),
-      rewardTransactionRepository.sumCredits(),
+    const [summary, pendingPartners, scanRaw] = await Promise.all([
+      dashboardRepository.getSummary(),
       userRepository.findPartners(page, limit, {
         approvalStatus: 'pending',
         search: query.search,
       }),
       dashboardRepository.scanDistributionByProduct(),
     ]);
+    const {
+      totalPartners,
+      pendingApprovals,
+      totalQrGenerated,
+      rewardAmountDistributed,
+      rewardPointsIssued,
+    } = summary;
 
     const partnerItems: DashboardPartnerRequest[] = pendingPartners.items.map(
       (item) => ({

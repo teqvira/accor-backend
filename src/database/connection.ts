@@ -15,7 +15,7 @@ const pool = new Pool({
   password: env.DB_PASSWORD,
   database: env.DB_NAME,
   ssl: isLocalDb ? undefined : { rejectUnauthorized: false },
-  max: isLocalDb ? 20 : 10,
+  max: isLocalDb ? 20 : 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: isLocalDb ? 5000 : 20000,
   keepAlive: true,

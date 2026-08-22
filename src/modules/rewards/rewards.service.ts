@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg';
 import { withTransaction } from '../../database/transactions';
+import { signS3ViewUrl } from '../../infrastructure/s3/s3.object-url';
 import {
   BadRequestError,
   ConflictError,
@@ -43,7 +44,12 @@ function buildRedemptionResponse(redemption: IRewardRedemption) {
   };
 }
 
-function sanitizeAdminRedemption(redemption: IRewardRedemption) {
+async function sanitizeAdminRedemption(redemption: IRewardRedemption) {
+  const [rewardImageUrl, handoverImageUrl] = await Promise.all([
+    signS3ViewUrl(redemption.rewardImageUrl),
+    signS3ViewUrl(redemption.handoverImageUrl),
+  ]);
+
   return {
     id: redemption._id,
     status: redemption.status,
@@ -58,13 +64,14 @@ function sanitizeAdminRedemption(redemption: IRewardRedemption) {
       id: redemption.rewardId,
       code: redemption.rewardCode,
       name: redemption.rewardName,
-      imageUrl: redemption.rewardImageUrl,
+      imageUrl: rewardImageUrl,
     },
     pointsSpent: redemption.pointsSpent,
     pointsBalanceAfter: redemption.pointsBalanceAfter,
     redeemedAt: redemption.redeemedAt,
     createdAt: redemption.createdAt,
-    handoverImageUrl: redemption.handoverImageUrl ?? null,
+    handoverImageUrl,
+    capturedImageUrl: handoverImageUrl,
     recipientName: redemption.recipientName ?? null,
     recipientPhone: redemption.recipientPhone ?? null,
     recipientNote: redemption.recipientNote ?? null,
@@ -453,7 +460,7 @@ export class RewardsService {
     );
 
     return {
-      items: items.map(sanitizeAdminRedemption),
+      items: await Promise.all(items.map(sanitizeAdminRedemption)),
       total,
       page,
       limit,
@@ -602,23 +609,16 @@ export class RewardsService {
   }
 
   async getRewardStats() {
-    const [catalogStats, totalRedemptions, pendingRequests, giftsRedeemed] =
-      await Promise.all([
-        rewardCatalogRepository.getStats(),
-        rewardRedemptionRepository.getTotalCount(),
-        rewardRedemptionRepository.getCountByStatus('pending'),
-        rewardRedemptionRepository.getCountByStatus('gifted'),
-      ]);
-
+    const stats = await rewardRedemptionRepository.getAdminStats();
     return {
-      totalRewards: catalogStats.total,
-      activeRewards: catalogStats.active,
-      upcomingRewards: catalogStats.upcoming,
-      inactiveRewards: catalogStats.inactive,
-      expiredRewards: catalogStats.expired,
-      totalRedemptionRequests: totalRedemptions,
-      pendingRedemptionRequests: pendingRequests,
-      totalGiftsRedeemed: giftsRedeemed,
+      totalRewards: stats.totalRewards,
+      activeRewards: stats.activeRewards,
+      upcomingRewards: stats.upcomingRewards,
+      inactiveRewards: stats.inactiveRewards,
+      expiredRewards: stats.expiredRewards,
+      totalRedemptionRequests: stats.totalRedemptions,
+      pendingRedemptionRequests: stats.pendingRequests,
+      totalGiftsRedeemed: stats.giftsRedeemed,
     };
   }
 }

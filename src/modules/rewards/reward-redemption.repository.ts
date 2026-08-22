@@ -251,4 +251,47 @@ export const rewardRedemptionRepository = {
     );
     return Number(result.rows[0]?.count ?? 0);
   },
+
+  getAdminStats: async (): Promise<{
+    totalRewards: number;
+    activeRewards: number;
+    upcomingRewards: number;
+    inactiveRewards: number;
+    expiredRewards: number;
+    totalRedemptions: number;
+    pendingRequests: number;
+    giftsRedeemed: number;
+  }> => {
+    const result = await pool.query<{
+      total_rewards: string;
+      active_rewards: string;
+      upcoming_rewards: string;
+      inactive_rewards: string;
+      expired_rewards: string;
+      total_redemptions: string;
+      pending_requests: string;
+      gifts_redeemed: string;
+    }>(
+      `SELECT
+         (SELECT COUNT(*)::text FROM reward_catalog) AS total_rewards,
+         (SELECT COUNT(*)::text FROM reward_catalog WHERE status = 'active') AS active_rewards,
+         (SELECT COUNT(*)::text FROM reward_catalog WHERE status = 'upcoming') AS upcoming_rewards,
+         (SELECT COUNT(*)::text FROM reward_catalog WHERE status = 'inactive') AS inactive_rewards,
+         (SELECT COUNT(*)::text FROM reward_catalog WHERE status = 'expired') AS expired_rewards,
+         (SELECT COUNT(*)::text FROM reward_redemptions) AS total_redemptions,
+         (SELECT COUNT(*)::text FROM reward_redemptions WHERE status = 'pending') AS pending_requests,
+         (SELECT COUNT(*)::text FROM reward_redemptions WHERE status = 'gifted') AS gifts_redeemed`
+    );
+    const row = result.rows[0];
+    return {
+      totalRewards: Number(row?.total_rewards ?? 0),
+      activeRewards: Number(row?.active_rewards ?? 0),
+      upcomingRewards: Number(row?.upcoming_rewards ?? 0),
+      inactiveRewards: Number(row?.inactive_rewards ?? 0),
+      expiredRewards: Number(row?.expired_rewards ?? 0),
+      totalRedemptions: Number(row?.total_redemptions ?? 0),
+      pendingRequests: Number(row?.pending_requests ?? 0),
+      giftsRedeemed: Number(row?.gifts_redeemed ?? 0),
+    };
+  },
 };

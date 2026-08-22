@@ -7,10 +7,49 @@ import {
   CreateNotificationInput,
   INotification,
   INotificationInboxItem,
+  NotificationType,
 } from './notifications.types';
 import { notificationRepository } from './notifications.repository';
 
+function navigationFor(
+  type: NotificationType,
+  data: Record<string, unknown>,
+  referenceId?: string
+): {
+  screen: string;
+  tab: number;
+  partnerId?: string;
+  redemptionId?: string;
+} {
+  switch (type) {
+    case 'partner_request':
+      return {
+        screen: 'requests',
+        tab: 1,
+        partnerId: String(data.userId ?? referenceId ?? ''),
+      };
+    case 'reward_request':
+      return {
+        screen: 'rewards',
+        tab: 2,
+        redemptionId: String(data.redemptionId ?? referenceId ?? ''),
+      };
+    case 'wallet_transaction':
+      return {
+        screen: 'requests',
+        tab: 1,
+        partnerId: String(data.userId ?? ''),
+      };
+    case 'campaign_expiry':
+    case 'coupon_expiry':
+      return { screen: 'home', tab: 0 };
+    default:
+      return { screen: 'inbox', tab: 0 };
+  }
+}
+
 function sanitizeInboxItem(item: INotificationInboxItem) {
+  const nav = navigationFor(item.type, item.data, item.referenceId);
   return {
     id: item._id,
     code: item.code ?? null,
@@ -21,9 +60,13 @@ function sanitizeInboxItem(item: INotificationInboxItem) {
     type: item.type,
     broadcastType: item.broadcastType ?? null,
     audience: item.audience,
-    data: item.data,
+    data: { ...item.data, ...nav },
     referenceType: item.referenceType ?? null,
     referenceId: item.referenceId ?? null,
+    screen: nav.screen,
+    tab: nav.tab,
+    partnerId: nav.partnerId || null,
+    redemptionId: nav.redemptionId || null,
     isRead: item.isRead,
     readAt: item.readAt ?? null,
     createdAt: item.createdAt,
@@ -114,6 +157,11 @@ export class NotificationsService {
         data: {
           notificationId: notification._id,
           type: notification.type,
+          ...navigationFor(
+            notification.type,
+            (notification.data ?? {}) as Record<string, unknown>,
+            notification.referenceId
+          ),
           ...(notification.data as Record<string, string | number | boolean>),
         },
       }
@@ -193,6 +241,9 @@ export class NotificationsService {
         referenceType: 'user',
         referenceId: input.userId,
         data: {
+          screen: 'requests',
+          tab: 1,
+          partnerId: input.userId,
           userId: input.userId,
           name: input.name ?? null,
           mobileNumber: input.mobileNumber ?? null,
@@ -220,8 +271,10 @@ export class NotificationsService {
         referenceType: 'reward_redemption',
         referenceId: input.redemptionId,
         data: {
-          userId: input.userId,
+          screen: 'rewards',
+          tab: 2,
           redemptionId: input.redemptionId,
+          userId: input.userId,
           rewardName: input.rewardName,
           pointsSpent: input.pointsSpent,
         },
@@ -251,6 +304,9 @@ export class NotificationsService {
         referenceType: 'wallet_transaction',
         referenceId: input.transactionId,
         data: {
+          screen: 'requests',
+          tab: 1,
+          partnerId: input.userId,
           userId: input.userId,
           transactionId: input.transactionId,
           amount: input.amount,
@@ -276,6 +332,8 @@ export class NotificationsService {
         referenceType: 'campaign',
         referenceId: input.campaignId,
         data: {
+          screen: 'home',
+          tab: 0,
           campaignId: input.campaignId,
           name: input.name,
           endDate: input.endDate.toISOString(),
@@ -299,6 +357,8 @@ export class NotificationsService {
         referenceType: 'qr_batch',
         referenceId: input.batchId,
         data: {
+          screen: 'home',
+          tab: 0,
           batchId: input.batchId,
           name: input.name,
           endDate: input.endDate.toISOString(),

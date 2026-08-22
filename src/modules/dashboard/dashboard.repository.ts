@@ -18,6 +18,49 @@ function mapDateCounts(
 }
 
 export const dashboardRepository = {
+  /** One round-trip for the five admin home summary cards. */
+  getSummary: async (): Promise<{
+    totalPartners: number;
+    pendingApprovals: number;
+    totalQrGenerated: number;
+    rewardAmountDistributed: number;
+    rewardPointsIssued: number;
+  }> => {
+    const result = await pool.query<{
+      total_partners: string;
+      pending_approvals: string;
+      total_qr: string;
+      wallet_credits: string;
+      reward_points: string;
+    }>(
+      `SELECT
+         (SELECT COUNT(*)::text
+            FROM users
+           WHERE role = 'user'
+             AND approval_status = 'approved'
+             AND is_active = true) AS total_partners,
+         (SELECT COUNT(*)::text
+            FROM users
+           WHERE role = 'user'
+             AND approval_status = 'pending') AS pending_approvals,
+         (SELECT COUNT(*)::text FROM qr_codes) AS total_qr,
+         (SELECT COALESCE(SUM(amount), 0)::text
+            FROM wallet_transactions
+           WHERE type = 'credit') AS wallet_credits,
+         (SELECT COALESCE(SUM(points), 0)::text
+            FROM reward_transactions
+           WHERE type = 'credit') AS reward_points`
+    );
+    const row = result.rows[0];
+    return {
+      totalPartners: Number(row?.total_partners ?? 0),
+      pendingApprovals: Number(row?.pending_approvals ?? 0),
+      totalQrGenerated: Number(row?.total_qr ?? 0),
+      rewardAmountDistributed: Number(row?.wallet_credits ?? 0),
+      rewardPointsIssued: Number(row?.reward_points ?? 0),
+    };
+  },
+
   countActivePartners: async (): Promise<number> => {
     const result = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
