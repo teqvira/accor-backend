@@ -42,6 +42,16 @@ export class CampaignsController {
     sendSuccess(res, 'Campaigns fetched successfully', result);
   }
 
+  async listUserCampaigns(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      sendSuccess(res, 'Active campaigns fetched successfully', { items: [] });
+      return;
+    }
+    const items = await campaignsService.getCampaignsForUser(userId);
+    sendSuccess(res, 'Active campaigns fetched successfully', { items });
+  }
+
   async getById(req: AuthRequest, res: Response): Promise<void> {
     const id = getParam(req.params.id);
     const campaign = await campaignsService.getCampaignById(id);
@@ -80,4 +90,3 @@ export class CampaignsController {
 }
 
 export const campaignsController = new CampaignsController();
-

@@ -1,10 +1,11 @@
-  import { withTransaction } from '../../database/transactions';
+import { withTransaction } from '../../database/transactions';
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from '../../shared/utils/errors';
 import { productsService } from '../products/products.service';
+import { userRepository } from '../auth/repositories/user.repository';
 import {
   campaignsRepository,
   parseEndDate,
@@ -86,6 +87,12 @@ export class CampaignsService {
     return campaignsRepository.findAll(params);
   }
 
+  async getCampaignsForUser(userId: string): Promise<ICampaign[]> {
+    const user = await userRepository.findById(userId);
+    const userPincode = user?.pincode || null;
+    return campaignsRepository.findActiveCampaignsForUser(userPincode);
+  }
+
   async updateCampaign(
     id: string,
     input: UpdateCampaignInput
@@ -112,9 +119,9 @@ export class CampaignsService {
 
     const startDate = input.startDate ? parseStartDate(input.startDate) : campaign.startDate;
     const endDate = input.endDate ? parseEndDate(input.endDate) : campaign.endDate;
-    if (endDate <= startDate) {
+    if (endDate < startDate) {
       throw new BadRequestError(
-        'End date must be after start date',
+        'End date must be on or after start date',
         `updateCampaign: startDate=${startDate}, endDate=${endDate}`
       );
     }
@@ -168,9 +175,15 @@ export class CampaignsService {
     userPincode?: string | null
   ): boolean {
     if (campaign.pincodeScope !== 'specific') return true;
+    if (!userPincode) return false;
+    const actual = userPincode.trim();
+
+    if (campaign.pincodes && campaign.pincodes.length > 0) {
+      return campaign.pincodes.some((p) => p.trim() === actual);
+    }
+
     const targeted = campaign.pincode?.trim();
-    const actual = userPincode?.trim();
-    if (!targeted || !actual) return false;
+    if (!targeted) return false;
     return targeted === actual;
   }
 
@@ -190,4 +203,3 @@ export class CampaignsService {
 }
 
 export const campaignsService = new CampaignsService();
-

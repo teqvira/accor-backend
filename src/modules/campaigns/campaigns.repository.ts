@@ -2,12 +2,14 @@ import { PoolClient } from 'pg';
 import pool from '../../database/connection';
 import {
   ActiveCampaignMultiplier,
+  CampaignBonusTarget,
   CampaignFilterParams,
   CampaignStatus,
   CreateCampaignInput,
   ICampaign,
   UpdateCampaignInput,
 } from './campaigns.types';
+import { normalizeBonusTarget } from './campaigns.validator';
 
 interface CampaignRow {
   id: string;
@@ -15,8 +17,10 @@ interface CampaignRow {
   name: string;
   product_id: string;
   multiplier: string | number;
+  apply_bonus_to?: string | null;
   pincode_scope?: string | null;
   pincode?: string | null;
+  pincodes?: string[] | null;
   start_date: Date;
   end_date: Date;
   active: boolean;
@@ -75,8 +79,6 @@ export function computeCampaignStatus(
   if (now > end) return CampaignStatus.EXPIRED;
 
   if (now < start) {
-    // If current local calendar date is on or after the start date's local calendar date,
-    // it is ACTIVE for the user!
     const isSameOrPastDay =
       now.getFullYear() > start.getFullYear() ||
       (now.getFullYear() === start.getFullYear() &&
@@ -98,14 +100,29 @@ function mapCampaignRow(row: CampaignRow): ICampaign {
     row.active
   );
 
+  const applyBonusTo: CampaignBonusTarget =
+    row.apply_bonus_to === 'cash' || row.apply_bonus_to === 'reward'
+      ? row.apply_bonus_to
+      : 'both';
+
+  const pincodesArray = Array.isArray(row.pincodes)
+    ? row.pincodes
+    : row.pincode
+      ? [row.pincode]
+      : [];
+
   const campaign: ICampaign = {
     _id: row.id,
     campaignCode: row.campaign_code,
     name: row.name,
     productId: row.product_id,
     multiplier: Number(row.multiplier),
+    applyBonusTo,
+    bonusType: applyBonusTo,
     pincodeScope: (row.pincode_scope === 'specific' ? 'specific' : 'all'),
-    pincode: row.pincode ?? undefined,
+    pincode: row.pincode ?? (pincodesArray[0] || undefined),
+    pincodes: pincodesArray,
+    allPincodes: row.pincode_scope !== 'specific',
     startDate: row.start_date,
     endDate: row.end_date,
     active: row.active,
@@ -151,10 +168,29 @@ export const campaignsRepository = {
   ): Promise<ICampaign> => {
     const db = client || pool;
 
+    const applyBonusTo = normalizeBonusTarget(
+      data.applyBonusTo || data.bonusType || data.type || 'both'
+    );
+
+    const isAll =
+      data.allPincodes === true ||
+      data.pincodeScope === 'all' ||
+      (!data.pincodes?.length && !data.pincode && data.pincodeScope !== 'specific');
+
+    const pincodeScope = isAll ? 'all' : 'specific';
+    const pincodesArray: string[] = isAll
+      ? []
+      : data.pincodes && data.pincodes.length > 0
+        ? data.pincodes
+        : data.pincode
+          ? [data.pincode]
+          : [];
+    const singlePincode = isAll ? null : (pincodesArray[0] || data.pincode || null);
+
     const result = await db.query<CampaignRow>(
       `INSERT INTO campaigns
-         (campaign_code, name, product_id, multiplier, start_date, end_date, active, created_by, pincode_scope, pincode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (campaign_code, name, product_id, multiplier, start_date, end_date, active, created_by, pincode_scope, pincode, apply_bonus_to, pincodes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         data.campaignCode,
@@ -165,11 +201,12 @@ export const campaignsRepository = {
         parseEndDate(data.endDate),
         data.active ?? true,
         data.createdBy || null,
-        data.pincodeScope === 'specific' ? 'specific' : 'all',
-        data.pincodeScope === 'specific' ? data.pincode ?? null : null,
+        pincodeScope,
+        singlePincode,
+        applyBonusTo,
+        pincodesArray,
       ]
     );
-
 
     const campaignId = result.rows[0].id;
 
@@ -361,15 +398,51 @@ export const campaignsRepository = {
       paramIdx++;
     }
 
-    if (data.pincodeScope !== undefined) {
-      setClauses.push(`pincode_scope = $${paramIdx}`);
-      queryParams.push(data.pincodeScope);
+    if (
+      data.applyBonusTo !== undefined ||
+      data.bonusType !== undefined ||
+      data.type !== undefined
+    ) {
+      const applyBonusTo = normalizeBonusTarget(
+        data.applyBonusTo || data.bonusType || data.type
+      );
+      setClauses.push(`apply_bonus_to = $${paramIdx}`);
+      queryParams.push(applyBonusTo);
       paramIdx++;
     }
 
-    if (data.pincode !== undefined || data.pincodeScope === 'all') {
+    const hasPincodeUpdate =
+      data.allPincodes !== undefined ||
+      data.pincodeScope !== undefined ||
+      data.pincodes !== undefined ||
+      data.pincode !== undefined;
+
+    if (hasPincodeUpdate) {
+      const isAll =
+        data.allPincodes === true ||
+        data.pincodeScope === 'all' ||
+        (data.allPincodes === undefined && data.pincodeScope === undefined && !data.pincodes?.length && !data.pincode);
+
+      const pincodeScope = isAll ? 'all' : 'specific';
+      const pincodesArray: string[] = isAll
+        ? []
+        : data.pincodes && data.pincodes.length > 0
+          ? data.pincodes
+          : data.pincode
+            ? [data.pincode]
+            : [];
+      const singlePincode = isAll ? null : (pincodesArray[0] || data.pincode || null);
+
+      setClauses.push(`pincode_scope = $${paramIdx}`);
+      queryParams.push(pincodeScope);
+      paramIdx++;
+
       setClauses.push(`pincode = $${paramIdx}`);
-      queryParams.push(data.pincodeScope === 'all' ? null : data.pincode ?? null);
+      queryParams.push(singlePincode);
+      paramIdx++;
+
+      setClauses.push(`pincodes = $${paramIdx}`);
+      queryParams.push(pincodesArray);
       paramIdx++;
     }
 
@@ -439,10 +512,12 @@ export const campaignsRepository = {
       campaign_code: string;
       name: string;
       multiplier: string | number;
+      apply_bonus_to: string | null;
       pincode_scope: string | null;
       pincode: string | null;
+      pincodes: string[] | null;
     }>(
-      `SELECT c.id, c.campaign_code, c.name, c.multiplier, c.pincode_scope, c.pincode
+      `SELECT c.id, c.campaign_code, c.name, c.multiplier, c.apply_bonus_to, c.pincode_scope, c.pincode, c.pincodes
        FROM campaigns c
        JOIN campaign_batches cb ON cb.campaign_id = c.id
        WHERE cb.batch_id = $1
@@ -456,15 +531,81 @@ export const campaignsRepository = {
 
     if (!result.rows[0]) return null;
 
+    const row = result.rows[0];
+    const applyBonusTo: CampaignBonusTarget =
+      row.apply_bonus_to === 'cash' || row.apply_bonus_to === 'reward'
+        ? row.apply_bonus_to
+        : 'both';
+
+    const pincodesArray = Array.isArray(row.pincodes)
+      ? row.pincodes
+      : row.pincode
+        ? [row.pincode]
+        : [];
+
     return {
-      campaignId: result.rows[0].id,
-      campaignCode: result.rows[0].campaign_code,
-      campaignName: result.rows[0].name,
-      multiplier: Number(result.rows[0].multiplier),
-      pincodeScope:
-        result.rows[0].pincode_scope === 'specific' ? 'specific' : 'all',
-      pincode: result.rows[0].pincode ?? undefined,
+      campaignId: row.id,
+      campaignCode: row.campaign_code,
+      campaignName: row.name,
+      multiplier: Number(row.multiplier),
+      applyBonusTo,
+      pincodeScope: row.pincode_scope === 'specific' ? 'specific' : 'all',
+      pincode: row.pincode ?? (pincodesArray[0] || undefined),
+      pincodes: pincodesArray,
     };
+  },
+
+  findActiveCampaignsForUser: async (
+    userPincode?: string | null,
+    client?: PoolClient
+  ): Promise<ICampaign[]> => {
+    const db = client || pool;
+    const pincode = userPincode ? userPincode.trim() : null;
+
+    const result = await db.query<CampaignRow>(
+      `SELECT c.*,
+              p.sku_code AS product_sku_code,
+              p.name AS product_name,
+              p.brand AS product_brand,
+              COALESCE(
+                (SELECT ARRAY_AGG(cb.batch_id) FROM campaign_batches cb WHERE cb.campaign_id = c.id),
+                '{}'::uuid[]
+              ) AS batch_ids,
+              COALESCE(
+                (
+                  SELECT JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                      'id', b.id,
+                      'name', b.name,
+                      'coupon_name', b.coupon_name,
+                      'wallet_amount', b.wallet_amount,
+                      'reward_points', b.reward_points
+                    )
+                  )
+                  FROM campaign_batches cb
+                  JOIN qr_batches b ON b.id = cb.batch_id
+                  WHERE cb.campaign_id = c.id
+                ),
+                '[]'::json
+              ) AS batches_info
+       FROM campaigns c
+       LEFT JOIN products p ON p.id = c.product_id
+       WHERE c.active = true
+         AND (NOW() AT TIME ZONE 'Asia/Kolkata')::date >= (c.start_date AT TIME ZONE 'Asia/Kolkata')::date
+         AND NOW() <= c.end_date
+         AND (
+           c.pincode_scope = 'all'
+           OR (
+             c.pincode_scope = 'specific'
+             AND $1::varchar IS NOT NULL
+             AND ($1 = ANY(c.pincodes) OR $1 = c.pincode)
+           )
+         )
+       ORDER BY c.created_at DESC`,
+      [pincode]
+    );
+
+    return result.rows.map(mapCampaignRow);
   },
 
   findByCode: async (code: string, client?: PoolClient): Promise<ICampaign | null> => {
@@ -527,4 +668,3 @@ export const campaignsRepository = {
     };
   },
 };
-
