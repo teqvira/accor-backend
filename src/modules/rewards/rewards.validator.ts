@@ -60,11 +60,15 @@ export const updateRedemptionStatusSchema = z
       .optional(),
     recipientName: z.string().trim().min(1).max(100).nullable().optional(),
     recipientPhone: z
-      .string()
-      .trim()
-      .regex(/^[6-9]\d{9}$/, 'Recipient phone must be a valid 10-digit Indian number')
-      .nullable()
-      .optional(),
+      .preprocess(
+        (val) => (val === '' || val === undefined ? null : val),
+        z
+          .string()
+          .trim()
+          .regex(/^[6-9]\d{9}$/, 'Recipient phone must be a valid 10-digit Indian number')
+          .nullable()
+          .optional()
+      ),
     recipientNote: z.string().trim().max(500).nullable().optional(),
     handoverDate: z.coerce.date().optional(),
   })
