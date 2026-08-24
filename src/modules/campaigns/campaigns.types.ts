@@ -5,14 +5,20 @@ export enum CampaignStatus {
   INACTIVE = 'inactive',
 }
 
+export type CampaignBonusTarget = 'cash' | 'reward' | 'both';
+
 export interface ICampaign {
   _id: string;
   campaignCode: string;
   name: string;
   productId: string;
   multiplier: number;
+  applyBonusTo: CampaignBonusTarget;
+  bonusType?: string;
   pincodeScope: 'all' | 'specific';
   pincode?: string;
+  pincodes?: string[];
+  allPincodes?: boolean;
   startDate: Date;
   endDate: Date;
   active: boolean;
@@ -41,8 +47,13 @@ export interface CreateCampaignInput {
   campaignCode?: string;
   productId: string;
   multiplier: number;
+  applyBonusTo?: CampaignBonusTarget | string;
+  bonusType?: string;
+  type?: string;
   pincodeScope?: 'all' | 'specific';
   pincode?: string | null;
+  pincodes?: string[];
+  allPincodes?: boolean;
   startDate: string;
   endDate: string;
   batchIds: string[];
@@ -54,8 +65,13 @@ export interface UpdateCampaignInput {
   campaignCode?: string;
   productId?: string;
   multiplier?: number;
+  applyBonusTo?: CampaignBonusTarget | string;
+  bonusType?: string;
+  type?: string;
   pincodeScope?: 'all' | 'specific';
   pincode?: string | null;
+  pincodes?: string[];
+  allPincodes?: boolean;
   startDate?: string;
   endDate?: string;
   batchIds?: string[];
@@ -76,6 +92,8 @@ export interface ActiveCampaignMultiplier {
   campaignCode: string;
   campaignName: string;
   multiplier: number;
+  applyBonusTo: CampaignBonusTarget;
   pincodeScope: 'all' | 'specific';
   pincode?: string;
+  pincodes?: string[];
 }

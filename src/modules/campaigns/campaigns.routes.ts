@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../shared/middleware/async-handler';
 import { validate } from '../../shared/middleware/validate';
 import { AuthRequest } from '../auth/auth.types';
-import { adminOnly } from '../auth/guards';
+import { adminOnly, userOnly } from '../auth/guards';
 import { campaignsController } from './campaigns.controller';
 import {
   createCampaignSchema,
@@ -12,6 +12,16 @@ import {
 
 const router = Router();
 
+// User-facing endpoint: get active campaigns eligible for the authenticated user's pincode
+router.get(
+  '/active',
+  ...userOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    campaignsController.listUserCampaigns(req, res)
+  )
+);
+
+// Admin-facing endpoints
 router.post(
   '/',
   ...adminOnly,

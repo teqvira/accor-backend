@@ -46,6 +46,7 @@ function campaignPayload(
     code: campaign.campaignCode,
     name: campaign.campaignName,
     multiplier: campaign.multiplier,
+    applyBonusTo: campaign.applyBonusTo,
   };
 }
 
@@ -121,10 +122,17 @@ export class RedemptionService {
       scanner?.pincode
     );
     const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
+    const applyBonusTo = activeCampaign?.applyBonusTo || 'both';
+
+    const cashMultiplier =
+      applyBonusTo === 'cash' || applyBonusTo === 'both' ? multiplier : 1.0;
+    const pointsMultiplier =
+      applyBonusTo === 'reward' || applyBonusTo === 'both' ? multiplier : 1.0;
+
     const effectiveWalletAmount = Number(
-      (batch.walletAmount * multiplier).toFixed(2)
+      (batch.walletAmount * cashMultiplier).toFixed(2)
     );
-    const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+    const effectiveRewardPoints = Math.round(batch.rewardPoints * pointsMultiplier);
     const pointsRecipient = scanner
       ? await resolvePointsRecipient(scanner)
       : {
@@ -315,10 +323,17 @@ export class RedemptionService {
         scanner.pincode
       );
       const multiplier = activeCampaign ? activeCampaign.multiplier : 1.0;
+      const applyBonusTo = activeCampaign?.applyBonusTo || 'both';
+
+      const cashMultiplier =
+        applyBonusTo === 'cash' || applyBonusTo === 'both' ? multiplier : 1.0;
+      const pointsMultiplier =
+        applyBonusTo === 'reward' || applyBonusTo === 'both' ? multiplier : 1.0;
+
       const effectiveWalletAmount = Number(
-        (batch.walletAmount * multiplier).toFixed(2)
+        (batch.walletAmount * cashMultiplier).toFixed(2)
       );
-      const effectiveRewardPoints = Math.round(batch.rewardPoints * multiplier);
+      const effectiveRewardPoints = Math.round(batch.rewardPoints * pointsMultiplier);
       const pointsRecipient = await resolvePointsRecipient(scanner, client);
 
       if (
@@ -347,9 +362,10 @@ export class RedemptionService {
         );
       }
 
-      const remarkText = activeCampaign
-        ? `QR redemption: ${code} (${activeCampaign.campaignName} - ${multiplier}x)`
-        : `QR redemption: ${code}`;
+      const bonusSuffix = activeCampaign
+        ? ` (${activeCampaign.campaignName} - ${multiplier}x ${applyBonusTo.toUpperCase()})`
+        : '';
+      const remarkText = `QR redemption: ${code}${bonusSuffix}`;
       const pointsRemark = pointsRecipient.isScanner
         ? remarkText
         : `${remarkText} (from worker ${scanner.name ?? scanner.mobileNumber})`;
@@ -402,6 +418,7 @@ export class RedemptionService {
                   id: activeCampaign.campaignId,
                   name: activeCampaign.campaignName,
                   multiplier,
+                  applyBonusTo,
                 }
               : null,
             allocation: {

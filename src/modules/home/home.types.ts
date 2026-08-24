@@ -1,5 +1,6 @@
 import { ActivityFeedResult } from '../activity/activity.types';
 import { UserType } from '../auth/user.types';
+import { ICampaign } from '../campaigns/campaigns.types';
 import { WithdrawalStatus } from '../withdrawals/withdrawal.constants';
 
 export interface HomeUserSummary {
@@ -35,4 +36,5 @@ export interface HomeResponse {
   balances: HomeBalances;
   stats: HomeStats;
   recentActivity: ActivityFeedResult;
+  activeCampaigns?: ICampaign[];
 }

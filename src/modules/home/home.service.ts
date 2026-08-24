@@ -1,6 +1,7 @@
 import { NotFoundError } from '../../shared/utils/errors';
 import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
+import { campaignsService } from '../campaigns/campaigns.service';
 import { homeRepository } from './home.repository';
 import { HomeResponse } from './home.types';
 
@@ -11,7 +12,7 @@ export class HomeService {
       throw new NotFoundError('User not found', `getHome: userId=${userId}`);
     }
 
-    const [totalScans, pendingWithdrawal, recentActivity] = await Promise.all([
+    const [totalScans, pendingWithdrawal, recentActivity, activeCampaigns] = await Promise.all([
       homeRepository.countTotalScans(userId),
       homeRepository.findPendingWithdrawalSummary(userId),
       activityService.getFeed({
@@ -20,6 +21,7 @@ export class HomeService {
         limit,
         scope: 'all',
       }),
+      campaignsService.getCampaignsForUser(userId),
     ]);
 
     return {
@@ -42,6 +44,7 @@ export class HomeService {
         pendingWithdrawal,
       },
       recentActivity,
+      activeCampaigns,
     };
   }
 }

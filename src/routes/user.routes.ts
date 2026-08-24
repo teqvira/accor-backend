@@ -7,6 +7,7 @@ import { redemptionUserRoutes } from '../modules/redemption/index';
 import { uploadUserRoutes } from '../modules/file-upload/index';
 import { withdrawalRoutes } from '../modules/withdrawals/index';
 import { notificationsUserRoutes } from '../modules/notifications/index';
+import { campaignsRoutes } from '../modules/campaigns/index';
 
 export function registerUserRoutes(app: Express): void {
   app.use('/api/home', homeUserRoutes);
@@ -17,4 +18,5 @@ export function registerUserRoutes(app: Express): void {
   app.use('/api/redemption', redemptionUserRoutes);
   app.use('/api/upload', uploadUserRoutes);
   app.use('/api/notifications', notificationsUserRoutes);
+  app.use('/api/campaigns', campaignsRoutes);
 }
