@@ -18,6 +18,7 @@ export interface IUser {
   rewardPoints: number;
   role: UserRole;
   isActive: boolean;
+  isBlocked: boolean;
   isVerified: boolean;
   approvalStatus: ApprovalStatus;
   avatarUrl?: string;
@@ -45,6 +46,7 @@ interface UserRow {
   reward_points: number;
   role: UserRole;
   is_active: boolean;
+  is_blocked?: boolean | null;
   is_verified: boolean;
   approval_status?: string | null;
   avatar_url?: string | null;
@@ -73,6 +75,7 @@ export function mapUserRow(row: UserRow): IUser {
     rewardPoints: row.reward_points,
     role: row.role,
     isActive: row.is_active,
+    isBlocked: Boolean(row.is_blocked),
     isVerified: row.is_verified,
     approvalStatus: (row.approval_status as ApprovalStatus) ?? 'pending',
     avatarUrl: row.avatar_url ?? undefined,
@@ -97,6 +100,7 @@ export interface CreateUserData {
   mobileNumber?: string;
   password?: string;
   role?: UserRole;
+  isBlocked?: boolean;
   isVerified?: boolean;
   approvalStatus?: ApprovalStatus;
   city?: string;
@@ -117,6 +121,7 @@ export interface UpdateUserData {
   password?: string;
   role?: UserRole;
   isActive?: boolean;
+  isBlocked?: boolean;
   isVerified?: boolean;
   approvalStatus?: ApprovalStatus;
   avatarUrl?: string | null;

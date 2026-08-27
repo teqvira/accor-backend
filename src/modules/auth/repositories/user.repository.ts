@@ -14,7 +14,7 @@ type Queryable = Pick<PoolClient, 'query'>;
 
 const USER_PUBLIC_COLUMNS = `
   id, name, email, mobile_number, wallet_balance, reward_points,
-  role, is_active, is_verified, approval_status,
+  role, is_active, is_blocked, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   pincode, garage_id, garage_role, garage_name, garage_owner_name,
   created_at, updated_at
@@ -22,7 +22,7 @@ const USER_PUBLIC_COLUMNS = `
 
 const USER_COLUMNS_WITH_PASSWORD = `
   id, name, email, mobile_number, password_hash, wallet_balance, reward_points,
-  role, is_active, is_verified, approval_status,
+  role, is_active, is_blocked, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   pincode, garage_id, garage_role, garage_name, garage_owner_name,
   created_at, updated_at
@@ -71,7 +71,7 @@ function mapPartnerRow(row: PartnerListRow): PartnerListItem {
 
 const PARTNER_USER_COLUMNS = `
   u.id, u.name, u.email, u.mobile_number, u.wallet_balance, u.reward_points,
-  u.role, u.is_active, u.is_verified, u.approval_status,
+  u.role, u.is_active, u.is_blocked, u.is_verified, u.approval_status,
   u.avatar_url, u.date_of_birth, u.city, u.state, u.user_type, u.profile_completed,
   u.pincode, u.garage_id, u.garage_role, u.garage_name, u.garage_owner_name,
   u.created_at, u.updated_at
@@ -154,9 +154,9 @@ export const userRepository = {
   create: async (data: CreateUserData): Promise<IUser> => {
     const result = await pool.query<UserRow>(
       `INSERT INTO users
-         (name, email, mobile_number, password_hash, role, is_verified,
+         (name, email, mobile_number, password_hash, role, is_active, is_blocked, is_verified,
           approval_status, city, state, user_type, profile_completed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${USER_PUBLIC_COLUMNS}`,
       [
         data.name ?? null,
@@ -164,6 +164,8 @@ export const userRepository = {
         data.mobileNumber ?? null,
         data.password ?? null,
         data.role ?? UserRole.USER,
+        data.isBlocked ? false : true,
+        data.isBlocked ?? false,
         data.isVerified ?? false,
         data.approvalStatus ?? 'pending',
         data.city ?? null,
@@ -208,6 +210,10 @@ export const userRepository = {
     if (data.isActive !== undefined) {
       sets.push(`is_active = $${paramIndex++}`);
       values.push(data.isActive);
+    }
+    if (data.isBlocked !== undefined) {
+      sets.push(`is_blocked = $${paramIndex++}`);
+      values.push(data.isBlocked);
     }
     if (data.isVerified !== undefined) {
       sets.push(`is_verified = $${paramIndex++}`);
@@ -358,6 +364,8 @@ export const userRepository = {
     filters: {
       userType?: UserType;
       approvalStatus?: ApprovalStatus;
+      status?: 'blocked' | 'unblocked';
+      isBlocked?: boolean;
       search?: string;
     } = {}
   ): Promise<{ items: PartnerListItem[]; total: number }> => {
@@ -372,6 +380,11 @@ export const userRepository = {
     if (filters.approvalStatus) {
       conditions.push(`u.approval_status = $${i++}`);
       values.push(filters.approvalStatus);
+    }
+    if (filters.status === 'blocked' || filters.isBlocked === true) {
+      conditions.push(`u.is_blocked = true`);
+    } else if (filters.status === 'unblocked' || filters.isBlocked === false) {
+      conditions.push(`u.is_blocked = false`);
     }
     if (filters.search) {
       conditions.push(
@@ -425,18 +438,21 @@ export const userRepository = {
     dealers: number;
     mechanics: number;
     pendingApprovals: number;
+    blockedPartners: number;
   }> => {
     const result = await pool.query<{
       total: string;
       dealers: string;
       mechanics: string;
       pending: string;
+      blocked: string;
     }>(`
       SELECT
         COUNT(*) FILTER (WHERE role = 'user')::text AS total,
         COUNT(*) FILTER (WHERE role = 'user' AND user_type = 'dealer')::text AS dealers,
         COUNT(*) FILTER (WHERE role = 'user' AND user_type = 'mechanic')::text AS mechanics,
-        COUNT(*) FILTER (WHERE role = 'user' AND approval_status = 'pending')::text AS pending
+        COUNT(*) FILTER (WHERE role = 'user' AND approval_status = 'pending')::text AS pending,
+        COUNT(*) FILTER (WHERE role = 'user' AND is_blocked = true)::text AS blocked
       FROM users
     `);
     const row = result.rows[0];
@@ -445,6 +461,7 @@ export const userRepository = {
       dealers: Number(row.dealers),
       mechanics: Number(row.mechanics),
       pendingApprovals: Number(row.pending),
+      blockedPartners: Number(row.blocked),
     };
   },
 

@@ -16,6 +16,7 @@ export class PartnersAdminController {
   }
 
   async list(req: AuthRequest, res: Response): Promise<void> {
+    const isBlockedQuery = getOptionalQueryParam(req.query.isBlocked);
     const result = await partnersService.list(
       getQueryNumber(req.query.page, 1),
       getQueryNumber(req.query.limit, 20),
@@ -26,6 +27,12 @@ export class PartnersAdminController {
         approvalStatus: getOptionalQueryParam(req.query.approvalStatus) as
           | ApprovalStatus
           | undefined,
+        status: getOptionalQueryParam(req.query.status) as
+          | 'blocked'
+          | 'unblocked'
+          | undefined,
+        isBlocked:
+          isBlockedQuery !== undefined ? isBlockedQuery === 'true' : undefined,
         search: getOptionalQueryParam(req.query.search),
       }
     );
@@ -53,6 +60,25 @@ export class PartnersAdminController {
       req.body?.reason
     );
     sendSuccess(res, 'Partner rejected successfully', { partner });
+  }
+
+  async block(req: AuthRequest, res: Response): Promise<void> {
+    const partner = await partnersService.block(
+      getParam(req.params.id),
+      req.body?.reason
+    );
+    sendSuccess(res, 'Partner blocked successfully', {
+      partner,
+      status: 'blocked',
+    });
+  }
+
+  async unblock(req: AuthRequest, res: Response): Promise<void> {
+    const partner = await partnersService.unblock(getParam(req.params.id));
+    sendSuccess(res, 'Partner unblocked successfully', {
+      partner,
+      status: 'unblocked',
+    });
   }
 
   async createDocumentPresignedUrl(

@@ -5,6 +5,7 @@ import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
 import { partnersAdminController } from './partners.admin.controller';
 import {
+  blockPartnerSchema,
   createPartnerSchema,
   listPartnersQuerySchema,
   partnerDocumentPresignedSchema,
@@ -60,6 +61,23 @@ router.post(
   validate(rejectPartnerSchema),
   asyncHandler<AuthRequest>((req, res) =>
     partnersAdminController.reject(req, res)
+  )
+);
+
+router.post(
+  '/:id/block',
+  ...adminOnly,
+  validate(blockPartnerSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    partnersAdminController.block(req, res)
+  )
+);
+
+router.post(
+  '/:id/unblock',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    partnersAdminController.unblock(req, res)
   )
 );
 

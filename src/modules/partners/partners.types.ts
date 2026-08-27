@@ -4,6 +4,8 @@ import { PartnerListItem } from '../auth/repositories/user.repository';
 export interface PartnerListFilters {
   userType?: UserType;
   approvalStatus?: ApprovalStatus;
+  status?: 'blocked' | 'unblocked';
+  isBlocked?: boolean;
   search?: string;
 }
 
@@ -38,6 +40,8 @@ export function sanitizePartner(item: PartnerListItem) {
     garageOwnerName: item.garageOwnerName ?? null,
     approvalStatus: item.approvalStatus,
     isActive: item.isActive,
+    isBlocked: item.isBlocked,
+    status: item.isBlocked ? 'blocked' : 'unblocked',
     isVerified: item.isVerified,
     profileCompleted: item.profileCompleted,
     avatarUrl: item.avatarUrl ?? null,

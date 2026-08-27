@@ -22,3 +22,6 @@
 \i sql/migrations/022_otp_purpose_withdrawal.sql
 \i sql/migrations/023_reward_gift_handover.sql
 \i sql/migrations/024_pincode_and_garage.sql
+\i sql/migrations/025_admin_perf_indexes.sql
+\i sql/migrations/026_campaign_bonus_and_pincodes.sql
+\i sql/migrations/027_user_blocked_status.sql

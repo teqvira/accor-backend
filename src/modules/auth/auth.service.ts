@@ -83,10 +83,14 @@ function sanitizeUser(user: IUser) {
     mobileNumber: user.mobileNumber,
     role: user.role,
     isActive: user.isActive,
+    isBlocked: user.isBlocked,
+    status: user.isBlocked ? 'blocked' : 'unblocked',
     isVerified: user.isVerified,
     approvalStatus: user.approvalStatus,
     canAccessApp:
-      user.role !== UserRole.USER || user.approvalStatus === 'approved',
+      !user.isBlocked &&
+      user.isActive &&
+      (user.role !== UserRole.USER || user.approvalStatus === 'approved'),
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
     avatarUrl: user.avatarUrl,
@@ -280,6 +284,13 @@ export class AuthService {
       );
     }
 
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `login: blocked user userId=${user._id}`
+      );
+    }
+
     if (!user.isActive) {
       throw new UnauthorizedError(
         'Your account has been deactivated. Please contact support',
@@ -348,6 +359,13 @@ export class AuthService {
       );
     }
 
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `sendMobileOtp: blocked user userId=${user._id}`
+      );
+    }
+
     if (!user.isActive) {
       throw new UnauthorizedError(
         'Your account has been deactivated. Please contact support',
@@ -391,7 +409,28 @@ export class AuthService {
     const staticOtpOk =
       isStaticTestMobile(mobileNumber) && otp === env.TEST_STATIC_OTP;
 
-    if (!user || (!otpRecord && !staticOtpOk)) {
+    if (!user) {
+      throw new BadRequestError(
+        'No OTP request found. Please request a new OTP',
+        `verifyMobileOtp: missing user for mobile=${mobileNumber}`
+      );
+    }
+
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `verifyMobileOtp: blocked user userId=${user._id}`
+      );
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError(
+        'Your account has been deactivated. Please contact support',
+        `verifyMobileOtp: inactive user userId=${user._id}`
+      );
+    }
+
+    if (!otpRecord && !staticOtpOk) {
       throw new BadRequestError(
         'No OTP request found. Please request a new OTP',
         `verifyMobileOtp: missing otp for mobile=${mobileNumber}`
@@ -480,6 +519,13 @@ export class AuthService {
       throw new UnauthorizedError(
         'Your session is invalid. Please log in again',
         `refreshToken: user not found userId=${payload.sub}`
+      );
+    }
+
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `refreshToken: blocked user userId=${user._id}`
       );
     }
 

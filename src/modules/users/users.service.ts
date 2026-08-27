@@ -40,10 +40,14 @@ function sanitizeUser(user: IUser) {
     mobileNumber: user.mobileNumber,
     role: user.role,
     isActive: user.isActive,
+    isBlocked: user.isBlocked,
+    status: user.isBlocked ? 'blocked' : 'unblocked',
     isVerified: user.isVerified,
     approvalStatus: user.approvalStatus,
     canAccessApp:
-      user.role !== UserRole.USER || user.approvalStatus === 'approved',
+      !user.isBlocked &&
+      user.isActive &&
+      (user.role !== UserRole.USER || user.approvalStatus === 'approved'),
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
     avatarUrl: user.avatarUrl,

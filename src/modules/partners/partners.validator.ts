@@ -10,6 +10,16 @@ export const listPartnersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   userType: z.enum(['mechanic', 'dealer']).optional(),
   approvalStatus: z.enum(['pending', 'approved', 'rejected']).optional(),
+  status: z.enum(['blocked', 'unblocked']).optional(),
+  isBlocked: z
+    .preprocess((val) => {
+      if (typeof val === 'string') {
+        if (val === 'true') return true;
+        if (val === 'false') return false;
+      }
+      return val;
+    }, z.boolean())
+    .optional(),
   search: z.string().trim().min(1).max(200).optional(),
 });
 
@@ -67,3 +77,8 @@ export const partnerDocumentPresignedSchema = z
 export const rejectPartnerSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
+
+export const blockPartnerSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+

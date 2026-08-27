@@ -5,7 +5,10 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { isPgUniqueViolation } from '../../shared/utils/postgres';
+import { refreshTokenRepository } from '../auth/repositories/refresh-token.repository';
+import { userDeviceTokenRepository } from '../auth/repositories/user-device-token.repository';
 import { userRepository } from '../auth/repositories/user.repository';
+import { userSessionRepository } from '../auth/repositories/user-session.repository';
 import { UserRole } from '../auth/user.types';
 import { isOwnProfileUploadUrl } from '../file-upload/profile-upload-key';
 import { isOwnBucketObjectUrl } from '../file-upload/product-image-key';
@@ -141,6 +144,45 @@ export class PartnersService {
     return this.getById(id);
   }
 
+  async block(id: string, _reason?: string) {
+    const partner = await getPartnerOrThrow(id);
+    if (partner.isBlocked) {
+      throw new BadRequestError(
+        'Partner is already blocked',
+        `block: partnerId=${id}`
+      );
+    }
+
+    await userRepository.update(id, {
+      isBlocked: true,
+      isActive: false,
+    });
+
+    // Invalidate active auth tokens, sessions, and push device tokens immediately
+    await refreshTokenRepository.revokeManyByUserId(id);
+    await userSessionRepository.closeManyByUserId(id);
+    await userDeviceTokenRepository.deactivateManyByUserId(id);
+
+    return this.getById(id);
+  }
+
+  async unblock(id: string) {
+    const partner = await getPartnerOrThrow(id);
+    if (!partner.isBlocked) {
+      throw new BadRequestError(
+        'Partner is not blocked',
+        `unblock: partnerId=${id}`
+      );
+    }
+
+    await userRepository.update(id, {
+      isBlocked: false,
+      isActive: true,
+    });
+
+    return this.getById(id);
+  }
+
   async createDocumentPresignedUrl(
     partnerId: string,
     input: { purpose: 'aadhaar' | 'pan'; fileName: string; contentType: string }
@@ -202,6 +244,13 @@ export async function assertPartnerApproved(userId: string): Promise<void> {
     );
   }
   if (user.role !== UserRole.USER) return;
+
+  if (user.isBlocked || !user.isActive) {
+    throw new ForbiddenError(
+      'Your account has been blocked. Please contact support',
+      `assertPartnerApproved: blocked/inactive userId=${userId}`
+    );
+  }
 
   if (user.approvalStatus === 'pending') {
     throw new ForbiddenError(
