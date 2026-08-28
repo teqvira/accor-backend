@@ -1,5 +1,9 @@
 import { Response } from 'express';
-import { getOptionalQueryParam, getParam } from '../../shared/utils/params';
+import {
+  getOptionalQueryParam,
+  getParam,
+  parseBooleanQuery,
+} from '../../shared/utils/params';
 import { sendSuccess } from '../../shared/utils/response';
 import { AuthRequest } from '../auth/auth.types';
 import { notificationsService } from './notifications.service';
@@ -41,7 +45,7 @@ export class NotificationsAdminController {
   async listInbox(req: AuthRequest, res: Response): Promise<void> {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
-    const unreadOnly = Boolean(req.query.unreadOnly);
+    const unreadOnly = parseBooleanQuery(req.query.unreadOnly);
     const result = await notificationsService.listInbox(
       req.user!.sub,
       page,
@@ -75,7 +79,7 @@ export class NotificationsUserController {
   async list(req: AuthRequest, res: Response): Promise<void> {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
-    const unreadOnly = Boolean(req.query.unreadOnly);
+    const unreadOnly = parseBooleanQuery(req.query.unreadOnly);
     const result = await notificationsService.listInbox(
       req.user!.sub,
       page,

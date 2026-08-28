@@ -20,6 +20,8 @@ function navigationFor(
   tab: number;
   partnerId?: string;
   redemptionId?: string;
+  campaignId?: string;
+  batchId?: string;
 } {
   switch (type) {
     case 'partner_request':
@@ -38,11 +40,20 @@ function navigationFor(
       return {
         screen: 'requests',
         tab: 1,
-        partnerId: String(data.userId ?? ''),
+        partnerId: String(data.userId ?? data.partnerId ?? referenceId ?? ''),
       };
     case 'campaign_expiry':
+      return {
+        screen: 'home',
+        tab: 0,
+        campaignId: String(data.campaignId ?? referenceId ?? ''),
+      };
     case 'coupon_expiry':
-      return { screen: 'home', tab: 0 };
+      return {
+        screen: 'home',
+        tab: 0,
+        batchId: String(data.batchId ?? referenceId ?? ''),
+      };
     default:
       return { screen: 'inbox', tab: 0 };
   }
@@ -67,6 +78,8 @@ function sanitizeInboxItem(item: INotificationInboxItem) {
     tab: nav.tab,
     partnerId: nav.partnerId || null,
     redemptionId: nav.redemptionId || null,
+    campaignId: nav.campaignId || null,
+    batchId: nav.batchId || null,
     isRead: item.isRead,
     readAt: item.readAt ?? null,
     createdAt: item.createdAt,

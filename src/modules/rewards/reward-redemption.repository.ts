@@ -82,6 +82,50 @@ export const rewardRedemptionRepository = {
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
 
+  findActiveByUserAndRewardId: async (
+    userId: string,
+    rewardId: string,
+    client?: Queryable
+  ): Promise<IRewardRedemption | null> => {
+    const db = client ?? pool;
+    const result = await db.query<RewardRedemptionRow>(
+      `SELECT ${COLS} FROM reward_redemptions
+       WHERE user_id = $1
+         AND reward_id = $2
+         AND status IN ('pending', 'gifted')
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [userId, rewardId]
+    );
+    return result.rows[0] ? mapRow(result.rows[0]) : null;
+  },
+
+  findLatestStatusByUserAndRewardIds: async (
+    userId: string,
+    rewardIds: string[]
+  ): Promise<Map<string, RewardRedemptionStatus>> => {
+    const statuses = new Map<string, RewardRedemptionStatus>();
+    if (rewardIds.length === 0) return statuses;
+
+    const result = await pool.query<{
+      reward_id: string;
+      status: RewardRedemptionStatus;
+    }>(
+      `SELECT DISTINCT ON (reward_id) reward_id, status
+       FROM reward_redemptions
+       WHERE user_id = $1
+         AND reward_id = ANY($2::uuid[])
+       ORDER BY reward_id, created_at DESC`,
+      [userId, rewardIds]
+    );
+
+    for (const row of result.rows) {
+      statuses.set(row.reward_id, row.status);
+    }
+    return statuses;
+  },
+
   findById: async (
     id: string,
     client?: Queryable
@@ -109,26 +153,40 @@ export const rewardRedemptionRepository = {
     data: CreateRewardRedemptionData,
     client: Queryable
   ): Promise<IRewardRedemption> => {
-    const result = await client.query<RewardRedemptionRow>(
-      `INSERT INTO reward_redemptions
-         (user_id, reward_id, idempotency_key,
-          reward_code, reward_name, reward_image_url,
-          points_spent, points_balance_after, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING ${COLS}`,
-      [
-        data.userId,
-        data.rewardId,
-        data.idempotencyKey,
-        data.rewardCode,
-        data.rewardName,
-        data.rewardImageUrl,
-        data.pointsSpent,
-        data.pointsBalanceAfter,
-        data.status ?? 'pending',
-      ]
-    );
-    return mapRow(result.rows[0]);
+    try {
+      const result = await client.query<RewardRedemptionRow>(
+        `INSERT INTO reward_redemptions
+           (user_id, reward_id, idempotency_key,
+            reward_code, reward_name, reward_image_url,
+            points_spent, points_balance_after, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING ${COLS}`,
+        [
+          data.userId,
+          data.rewardId,
+          data.idempotencyKey,
+          data.rewardCode,
+          data.rewardName,
+          data.rewardImageUrl,
+          data.pointsSpent,
+          data.pointsBalanceAfter,
+          data.status ?? 'pending',
+        ]
+      );
+      return mapRow(result.rows[0]);
+    } catch (err: unknown) {
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        (err as { code?: string }).code === '23505'
+      ) {
+        const conflict = new Error('REWARD_ALREADY_REDEEMED');
+        conflict.name = 'RewardAlreadyRedeemedError';
+        throw conflict;
+      }
+      throw err;
+    }
   },
 
   findAllAdmin: async (

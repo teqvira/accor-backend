@@ -59,6 +59,7 @@ function buildFeedSql(scope: ActivityScope): {
         NULL::uuid AS reward_item_id,
         NULL::text AS reward_item_name,
         NULL::text AS reward_item_image_url,
+        NULL::text AS redemption_status,
         NULL::text AS remarks
       FROM redemption_transactions rt
       LEFT JOIN products p ON p.id = rt.product_id
@@ -105,6 +106,7 @@ function buildFeedSql(scope: ActivityScope): {
         NULL::uuid AS reward_item_id,
         NULL::text AS reward_item_name,
         NULL::text AS reward_item_image_url,
+        NULL::text AS redemption_status,
         wt.remarks::text AS remarks
       FROM wallet_transactions wt
       LEFT JOIN withdrawals w
@@ -149,6 +151,7 @@ function buildFeedSql(scope: ActivityScope): {
         COALESCE(rr.reward_id, rc.id) AS reward_item_id,
         COALESCE(rr.reward_name, rc.name)::text AS reward_item_name,
         COALESCE(rr.reward_image_url, rc.image_url)::text AS reward_item_image_url,
+        rr.status::text AS redemption_status,
         rwt.remarks::text AS remarks
       FROM reward_transactions rwt
       LEFT JOIN reward_redemptions rr

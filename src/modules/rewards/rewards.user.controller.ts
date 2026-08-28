@@ -48,7 +48,7 @@ export class RewardsUserController {
       req.body.rewardId,
       req.body.idempotencyKey
     );
-    sendSuccess(res, 'Reward redeemed successfully', result);
+    sendSuccess(res, 'Reward request submitted successfully', result);
   }
 }
 

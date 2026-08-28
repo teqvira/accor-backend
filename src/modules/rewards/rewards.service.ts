@@ -4,6 +4,7 @@ import { signS3ViewUrl } from '../../infrastructure/s3/s3.object-url';
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
@@ -192,12 +193,26 @@ export class RewardsService {
     }
 
     const { items, total } = await rewardCatalogRepository.findActive(page, limit, category);
+    const rewardIds = items.map((item: IRewardCatalogItem) => item._id);
+    const redemptionStatuses =
+      await rewardRedemptionRepository.findLatestStatusByUserAndRewardIds(
+        userId,
+        rewardIds
+      );
+    const pointsEligible = user.userType !== 'mechanic';
 
     const storeItems = items.map((item: IRewardCatalogItem) => {
       const stockRemaining = item.stockQuantity; // null = unlimited
       const inStock =
         stockRemaining === null || stockRemaining > 0;
-      const canRedeem = inStock && user.rewardPoints >= item.pointsCost;
+      const redemptionStatus = redemptionStatuses.get(item._id) ?? null;
+      const alreadyHeld =
+        redemptionStatus === 'pending' || redemptionStatus === 'gifted';
+      const canRedeem =
+        pointsEligible &&
+        inStock &&
+        !alreadyHeld &&
+        user.rewardPoints >= item.pointsCost;
 
       return {
         id: item._id,
@@ -210,11 +225,14 @@ export class RewardsService {
         stockRemaining,
         available: inStock,
         canRedeem,
+        redemptionStatus,
+        pointsEligible,
       };
     });
 
     return {
       points: user.rewardPoints,
+      pointsEligible,
       milestones: [...REWARD_STORE_MILESTONES],
       items: storeItems,
       total,
@@ -231,30 +249,20 @@ export class RewardsService {
   ) {
     await assertPartnerApproved(userId);
 
-    // Pre-transaction idempotency check (fast path, no lock)
-    const existing = await rewardRedemptionRepository.findByUserAndIdempotencyKey(
-      userId,
-      idempotencyKey
-    );
-    if (existing) {
-      if (existing.rewardId !== rewardId) {
-        throw new ConflictError(
-          'This idempotency key was already used for a different reward',
-          `redeemReward: idempotencyKey=${idempotencyKey} used for rewardId=${existing.rewardId}`
-        );
-      }
-      // Replay prior response
-      return buildRedemptionResponse(existing);
-    }
-
     const result = await withTransaction(async (client) => {
       // Lock user row
       const user = await userRepository.findByIdForUpdate(userId, client);
       if (!user) {
         throw new NotFoundError('User not found', `redeemReward: userId=${userId}`);
       }
+      if (user.userType === 'mechanic') {
+        throw new ForbiddenError(
+          'Mechanics can earn cash only and cannot redeem reward points',
+          `redeemReward: mechanic userId=${userId}`
+        );
+      }
 
-      // Post-lock idempotency re-check (race guard)
+      // Pre-lock idempotency re-check (race guard)
       const existingAfterLock =
         await rewardRedemptionRepository.findByUserAndIdempotencyKey(
           userId,
@@ -269,6 +277,21 @@ export class RewardsService {
           );
         }
         return { response: buildRedemptionResponse(existingAfterLock), isNew: false as const };
+      }
+
+      const existingForReward =
+        await rewardRedemptionRepository.findActiveByUserAndRewardId(
+          userId,
+          rewardId,
+          client
+        );
+      if (existingForReward) {
+        throw new ConflictError(
+          existingForReward.status === 'pending'
+            ? 'You already have a pending request for this reward'
+            : 'You have already redeemed this reward',
+          `redeemReward: existing status=${existingForReward.status} userId=${userId} rewardId=${rewardId}`
+        );
       }
 
       // Lock reward row
@@ -303,19 +326,33 @@ export class RewardsService {
       }
 
       // Insert redemption snapshot first
-      const redemption = await rewardRedemptionRepository.create(
-        {
-          userId,
-          rewardId,
-          idempotencyKey,
-          rewardCode: reward.code,
-          rewardName: reward.name,
-          rewardImageUrl: reward.imageUrl,
-          pointsSpent: reward.pointsCost,
-          pointsBalanceAfter,
-        },
-        client
-      );
+      let redemption: IRewardRedemption;
+      try {
+        redemption = await rewardRedemptionRepository.create(
+          {
+            userId,
+            rewardId,
+            idempotencyKey,
+            rewardCode: reward.code,
+            rewardName: reward.name,
+            rewardImageUrl: reward.imageUrl,
+            pointsSpent: reward.pointsCost,
+            pointsBalanceAfter,
+          },
+          client
+        );
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          err.name === 'RewardAlreadyRedeemedError'
+        ) {
+          throw new ConflictError(
+            'You already have a request for this reward',
+            `redeemReward: unique userId=${userId} rewardId=${rewardId}`
+          );
+        }
+        throw err;
+      }
 
       // Debit points via rewardsService (updates user balance + inserts ledger row)
       await this.debitInSession(
