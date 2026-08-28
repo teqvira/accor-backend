@@ -19,6 +19,7 @@ import {
   PartnerListFilters,
   sanitizePartner,
   UpdatePartnerDocumentsInput,
+  UpdatePartnerInput,
 } from './partners.types';
 
 async function getPartnerOrThrow(id: string) {
@@ -105,6 +106,69 @@ export class PartnersService {
         throw new ConflictError(
           'Mobile number or email is already registered',
           'createPartner: unique violation'
+        );
+      }
+      throw err;
+    }
+  }
+
+  async update(id: string, input: UpdatePartnerInput) {
+    await getPartnerOrThrow(id);
+
+    if (input.aadhaarUrl && !isOwnBucketObjectUrl(input.aadhaarUrl)) {
+      throw new BadRequestError(
+        'Aadhaar must be an uploaded document URL',
+        'updatePartner: invalid aadhaarUrl'
+      );
+    }
+    if (input.panUrl && !isOwnBucketObjectUrl(input.panUrl)) {
+      throw new BadRequestError(
+        'PAN must be an uploaded document URL',
+        'updatePartner: invalid panUrl'
+      );
+    }
+
+    try {
+      await userRepository.update(id, {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.email !== undefined
+          ? { email: input.email.trim().toLowerCase() }
+          : {}),
+        ...(input.mobileNumber !== undefined
+          ? { mobileNumber: input.mobileNumber }
+          : {}),
+        ...(input.userType !== undefined ? { userType: input.userType } : {}),
+        ...(input.city !== undefined
+          ? { city: input.city ? input.city.trim() : null }
+          : {}),
+        ...(input.state !== undefined
+          ? { state: input.state ? input.state.trim() : null }
+          : {}),
+      });
+
+      if (input.aadhaarUrl) {
+        await userDocumentRepository.upsertByUserAndType({
+          userId: id,
+          documentType: 'aadhaar',
+          documentFront: input.aadhaarUrl,
+          status: 'approved',
+        });
+      }
+      if (input.panUrl) {
+        await userDocumentRepository.upsertByUserAndType({
+          userId: id,
+          documentType: 'pan',
+          documentFront: input.panUrl,
+          status: 'approved',
+        });
+      }
+
+      return this.getById(id);
+    } catch (err: unknown) {
+      if (isPgUniqueViolation(err)) {
+        throw new ConflictError(
+          'Mobile number or email is already registered',
+          'updatePartner: unique violation'
         );
       }
       throw err;

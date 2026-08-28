@@ -25,6 +25,17 @@ export interface UpdatePartnerDocumentsInput {
   panUrl?: string;
 }
 
+export interface UpdatePartnerInput {
+  name?: string;
+  mobileNumber?: string;
+  userType?: UserType;
+  email?: string;
+  city?: string;
+  state?: string;
+  aadhaarUrl?: string;
+  panUrl?: string;
+}
+
 export function sanitizePartner(item: PartnerListItem) {
   return {
     id: item._id,

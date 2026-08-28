@@ -49,6 +49,14 @@ export class PartnersAdminController {
     sendSuccess(res, 'Partner created successfully', { partner }, 201);
   }
 
+  async update(req: AuthRequest, res: Response): Promise<void> {
+    const partner = await partnersService.update(
+      getParam(req.params.id),
+      req.body
+    );
+    sendSuccess(res, 'Partner updated successfully', { partner });
+  }
+
   async approve(req: AuthRequest, res: Response): Promise<void> {
     const partner = await partnersService.approve(getParam(req.params.id));
     sendSuccess(res, 'Partner approved successfully', { partner });

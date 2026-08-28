@@ -11,6 +11,7 @@ import {
   partnerDocumentPresignedSchema,
   rejectPartnerSchema,
   updatePartnerDocumentsSchema,
+  updatePartnerSchema,
 } from './partners.validator';
 
 const router = Router();
@@ -44,6 +45,15 @@ router.get(
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) =>
     partnersAdminController.getById(req, res)
+  )
+);
+
+router.patch(
+  '/:id',
+  ...adminOnly,
+  validate(updatePartnerSchema),
+  asyncHandler<AuthRequest>((req, res) =>
+    partnersAdminController.update(req, res)
   )
 );
 

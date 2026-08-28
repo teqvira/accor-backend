@@ -34,6 +34,21 @@ export const createPartnerSchema = z.object({
   panUrl: z.string().trim().url('PAN document upload is required'),
 });
 
+export const updatePartnerSchema = z
+  .object({
+    name: z.string().trim().min(2).max(100).optional(),
+    mobileNumber: mobileNumberSchema.optional(),
+    userType: z.enum(['mechanic', 'dealer']).optional(),
+    email: z.string().trim().email().optional(),
+    city: z.string().trim().min(2).max(100).optional().nullable(),
+    state: z.string().trim().min(2).max(100).optional().nullable(),
+    aadhaarUrl: z.string().trim().url().optional(),
+    panUrl: z.string().trim().url().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field is required to update',
+  });
+
 export const updatePartnerDocumentsSchema = z
   .object({
     aadhaarUrl: z.string().trim().url().optional(),
