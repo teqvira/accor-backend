@@ -16,6 +16,7 @@ import { qrCodeRepository } from '../qr/repositories/qr-code.repository';
 import { rewardsService } from '../rewards/rewards.service';
 import { redemptionTransactionRepository } from '../transactions/redemption-transaction.repository';
 import { userRepository } from '../auth/repositories/user.repository';
+import { IUser } from '../auth/user.types';
 import { otpVerificationRepository } from '../auth/repositories/otp-verification.repository';
 import { generateOtp, hashOtp, verifyOtpHash } from '../auth/otp.util';
 import { walletService } from '../wallet/wallet.service';
@@ -80,6 +81,10 @@ async function resolvePointsRecipient(
   };
 }
 
+function earnsRewardPoints(user: IUser): boolean {
+  return user.userType !== 'mechanic';
+}
+
 export class RedemptionService {
   async validateCode(code: string, userId?: string) {
     const qrCode = await qrCodeRepository.findByCode(code);
@@ -132,7 +137,10 @@ export class RedemptionService {
     const effectiveWalletAmount = Number(
       (batch.walletAmount * cashMultiplier).toFixed(2)
     );
-    const effectiveRewardPoints = Math.round(batch.rewardPoints * pointsMultiplier);
+    const mechanicCashOnly = scanner ? !earnsRewardPoints(scanner) : false;
+    const effectiveRewardPoints = mechanicCashOnly
+      ? 0
+      : Math.round(batch.rewardPoints * pointsMultiplier);
     const pointsRecipient = scanner
       ? await resolvePointsRecipient(scanner)
       : {
@@ -154,17 +162,22 @@ export class RedemptionService {
         id: batch._id,
         name: batch.name,
         baseWalletAmount: batch.walletAmount,
-        baseRewardPoints: batch.rewardPoints,
+        baseRewardPoints: mechanicCashOnly ? 0 : batch.rewardPoints,
         walletAmount: effectiveWalletAmount,
         rewardPoints: effectiveRewardPoints,
       },
       campaign: campaignPayload(activeCampaign),
       allocation: {
         cashTo: 'self',
-        pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
-        pointsRecipientName: pointsRecipient.isScanner
-          ? null
-          : pointsRecipient.name,
+        pointsTo: mechanicCashOnly
+          ? 'none'
+          : pointsRecipient.isScanner
+            ? 'self'
+            : 'owner',
+        pointsRecipientName:
+          mechanicCashOnly || pointsRecipient.isScanner
+            ? null
+            : pointsRecipient.name,
       },
       redeemable: true,
     };
@@ -333,7 +346,10 @@ export class RedemptionService {
       const effectiveWalletAmount = Number(
         (batch.walletAmount * cashMultiplier).toFixed(2)
       );
-      const effectiveRewardPoints = Math.round(batch.rewardPoints * pointsMultiplier);
+      const mechanicCashOnly = !earnsRewardPoints(scanner);
+      const effectiveRewardPoints = mechanicCashOnly
+        ? 0
+        : Math.round(batch.rewardPoints * pointsMultiplier);
       const pointsRecipient = await resolvePointsRecipient(scanner, client);
 
       if (
@@ -379,14 +395,16 @@ export class RedemptionService {
         'qr_redemption'
       );
 
-      await rewardsService.creditInSession(
-        pointsRecipient.userId,
-        effectiveRewardPoints,
-        updatedQr._id,
-        pointsRemark,
-        client,
-        'qr_redemption'
-      );
+      if (effectiveRewardPoints > 0) {
+        await rewardsService.creditInSession(
+          pointsRecipient.userId,
+          effectiveRewardPoints,
+          updatedQr._id,
+          pointsRemark,
+          client,
+          'qr_redemption'
+        );
+      }
 
       const redemptionTx = await redemptionTransactionRepository.create(
         {
@@ -398,7 +416,8 @@ export class RedemptionService {
           rewardPoints: effectiveRewardPoints,
           campaignId: activeCampaign?.campaignId,
           multiplierApplied: multiplier,
-          pointsCreditedToUserId: pointsRecipient.userId,
+          pointsCreditedToUserId:
+            effectiveRewardPoints > 0 ? pointsRecipient.userId : undefined,
           redeemedAt: updatedQr.redeemedAt,
         },
         client
@@ -423,10 +442,15 @@ export class RedemptionService {
               : null,
             allocation: {
               cashTo: 'self',
-              pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
-              pointsRecipientName: pointsRecipient.isScanner
-                ? null
-                : pointsRecipient.name,
+              pointsTo: mechanicCashOnly
+                ? 'none'
+                : pointsRecipient.isScanner
+                  ? 'self'
+                  : 'owner',
+              pointsRecipientName:
+                mechanicCashOnly || pointsRecipient.isScanner
+                  ? null
+                  : pointsRecipient.name,
             },
             redeemedAt: updatedQr.redeemedAt,
           },

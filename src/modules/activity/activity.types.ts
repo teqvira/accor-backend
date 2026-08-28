@@ -114,5 +114,6 @@ export interface ActivityFeedRow {
   reward_item_id: string | null;
   reward_item_name: string | null;
   reward_item_image_url: string | null;
+  redemption_status: string | null;
   remarks: string | null;
 }

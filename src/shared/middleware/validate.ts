@@ -11,7 +11,13 @@ export function validate(schema: Schema, source: 'body' | 'query' = 'body') {
       return;
     }
     if (source === 'query') {
-      Object.assign(req.query as Record<string, unknown>, result.data);
+      // Express 5 exposes `req.query` as a getter; replace it so transforms persist.
+      Object.defineProperty(req, 'query', {
+        value: result.data,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
     } else {
       req.body = result.data;
     }

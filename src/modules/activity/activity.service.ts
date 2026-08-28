@@ -46,6 +46,11 @@ function mapFeedStatus(row: ActivityFeedRow): ActivityStatus {
   if (row.kind === 'withdrawal_refund') {
     return 'success';
   }
+  if (row.kind === 'reward_redeem') {
+    if (row.redemption_status === 'pending') return 'pending';
+    if (row.redemption_status === 'rejected') return 'failed';
+    return 'success';
+  }
   if (row.kind === 'withdrawal') {
     const status = mapWithdrawalStatus(row.withdrawal_status);
     if (status === 'pending') return 'pending';
@@ -65,6 +70,8 @@ function buildTitle(row: ActivityFeedRow): string {
     case 'withdrawal_refund':
       return 'Withdrawal Refund';
     case 'reward_redeem':
+      if (row.redemption_status === 'pending') return 'Reward Pending';
+      if (row.redemption_status === 'rejected') return 'Reward Rejected';
       return 'Reward Redeemed';
     case 'wallet_adjustment':
       if (row.wallet_direction === 'debit') return 'Wallet Debit';

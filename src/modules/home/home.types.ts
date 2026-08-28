@@ -17,6 +17,7 @@ export interface HomeUserSummary {
 export interface HomeBalances {
   walletBalance: number;
   rewardPoints: number;
+  pointsEligible: boolean;
 }
 
 export interface HomePendingWithdrawal {

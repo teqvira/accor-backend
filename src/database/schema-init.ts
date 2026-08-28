@@ -42,8 +42,21 @@ export async function initCampaignSchema(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_campaigns_apply_bonus_to ON campaigns (apply_bonus_to);
       CREATE INDEX IF NOT EXISTS idx_campaigns_pincodes_gin ON campaigns USING GIN (pincodes);
+
+      DELETE FROM reward_redemptions a
+      USING reward_redemptions b
+      WHERE a.user_id = b.user_id
+        AND a.reward_id = b.reward_id
+        AND a.status IN ('pending', 'gifted')
+        AND b.status IN ('pending', 'gifted')
+        AND a.created_at < b.created_at;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_reward_redemptions_user_reward_active
+        ON reward_redemptions (user_id, reward_id)
+        WHERE status IN ('pending', 'gifted');
     `);
     console.log('Campaign schema checked/updated (apply_bonus_to + pincodes)');
+    console.log('Reward uniqueness checked/updated (one active redemption per user/reward)');
   } catch (err) {
     console.error('Failed to initialize campaign schema:', err);
   }

@@ -38,6 +38,7 @@ export class HomeService {
       balances: {
         walletBalance: user.walletBalance,
         rewardPoints: user.rewardPoints,
+        pointsEligible: user.userType !== 'mechanic',
       },
       stats: {
         totalScans,

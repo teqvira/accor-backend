@@ -15,3 +15,13 @@ export function getQueryNumber(value: unknown, fallback: number): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
+
+/** Query strings like "false" must not be treated as true (`Boolean("false") === true`). */
+export function parseBooleanQuery(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return false;
+}
