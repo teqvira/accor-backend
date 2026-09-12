@@ -4,7 +4,8 @@ export type NotificationType =
   | 'wallet_transaction'
   | 'campaign_expiry'
   | 'coupon_expiry'
-  | 'admin_broadcast';
+  | 'admin_broadcast'
+  | 'account_deletion';
 
 /** Admin UI notification types (Create / list filter). */
 export type NotificationBroadcastType =

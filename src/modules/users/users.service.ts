@@ -47,6 +47,7 @@ function sanitizeUser(user: IUser) {
     canAccessApp:
       !user.isBlocked &&
       user.isActive &&
+      !user.deletedAt &&
       (user.role !== UserRole.USER || user.approvalStatus === 'approved'),
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
@@ -61,6 +62,7 @@ function sanitizeUser(user: IUser) {
     garageName: user.garageName,
     garageOwnerName: user.garageOwnerName,
     profileCompleted: user.profileCompleted,
+    deletedAt: user.deletedAt ?? null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

@@ -90,6 +90,7 @@ function sanitizeUser(user: IUser) {
     canAccessApp:
       !user.isBlocked &&
       user.isActive &&
+      !user.deletedAt &&
       (user.role !== UserRole.USER || user.approvalStatus === 'approved'),
     walletBalance: user.walletBalance,
     rewardPoints: user.rewardPoints,
@@ -106,8 +107,32 @@ function sanitizeUser(user: IUser) {
     garageName: user.garageName,
     garageOwnerName: user.garageOwnerName,
     profileCompleted: user.profileCompleted,
+    deletedAt: user.deletedAt,
     createdAt: user.createdAt,
   };
+}
+
+function assertAccountAccessible(user: IUser, context: string): void {
+  if (user.isBlocked) {
+    throw new UnauthorizedError(
+      'Your account has been blocked. Please contact support',
+      `${context}: blocked user userId=${user._id}`
+    );
+  }
+
+  if (user.deletedAt) {
+    throw new UnauthorizedError(
+      'Your account has been deleted',
+      `${context}: deleted user userId=${user._id}`
+    );
+  }
+
+  if (!user.isActive) {
+    throw new UnauthorizedError(
+      'Your account has been deactivated. Please contact support',
+      `${context}: inactive user userId=${user._id}`
+    );
+  }
 }
 
 async function hashRefreshToken(token: string): Promise<string> {
@@ -284,19 +309,7 @@ export class AuthService {
       );
     }
 
-    if (user.isBlocked) {
-      throw new UnauthorizedError(
-        'Your account has been blocked. Please contact support',
-        `login: blocked user userId=${user._id}`
-      );
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedError(
-        'Your account has been deactivated. Please contact support',
-        `login: inactive user userId=${user._id}`
-      );
-    }
+    assertAccountAccessible(user, 'login');
 
     const valid = await bcrypt.compare(password, user.password ?? '');
     if (!valid) {
@@ -359,19 +372,7 @@ export class AuthService {
       );
     }
 
-    if (user.isBlocked) {
-      throw new UnauthorizedError(
-        'Your account has been blocked. Please contact support',
-        `sendMobileOtp: blocked user userId=${user._id}`
-      );
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedError(
-        'Your account has been deactivated. Please contact support',
-        `sendMobileOtp: inactive user userId=${user._id}`
-      );
-    }
+    assertAccountAccessible(user, 'sendMobileOtp');
 
     await assertOtpResendAllowed({ mobileNumber, purpose: 'login' });
 
@@ -416,19 +417,7 @@ export class AuthService {
       );
     }
 
-    if (user.isBlocked) {
-      throw new UnauthorizedError(
-        'Your account has been blocked. Please contact support',
-        `verifyMobileOtp: blocked user userId=${user._id}`
-      );
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedError(
-        'Your account has been deactivated. Please contact support',
-        `verifyMobileOtp: inactive user userId=${user._id}`
-      );
-    }
+    assertAccountAccessible(user, 'verifyMobileOtp');
 
     if (!otpRecord && !staticOtpOk) {
       throw new BadRequestError(
@@ -522,19 +511,7 @@ export class AuthService {
       );
     }
 
-    if (user.isBlocked) {
-      throw new UnauthorizedError(
-        'Your account has been blocked. Please contact support',
-        `refreshToken: blocked user userId=${user._id}`
-      );
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedError(
-        'Your account has been deactivated. Please contact support',
-        `refreshToken: inactive user userId=${user._id}`
-      );
-    }
+    assertAccountAccessible(user, 'refreshToken');
 
     const next = await buildTokenPair(user);
 

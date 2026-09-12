@@ -4,7 +4,8 @@ export type OtpPurpose =
   | 'login'
   | 'password_reset'
   | 'qr_redemption'
-  | 'withdrawal';
+  | 'withdrawal'
+  | 'account_deletion';
 
 export interface IOtpVerification {
   _id: string;

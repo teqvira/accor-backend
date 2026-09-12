@@ -1,4 +1,5 @@
 import { Express } from 'express';
+import { accountDeletionAdminRoutes } from '../modules/account-deletion/index';
 import { authAdminRoutes } from '../modules/auth/index';
 import { usersAdminRoutes } from '../modules/users/index';
 import { walletAdminRoutes } from '../modules/wallet/index';
@@ -15,6 +16,7 @@ import { notificationsAdminRoutes } from '../modules/notifications/index';
 export function registerAdminRoutes(app: Express): void {
   app.use('/api/auth', authAdminRoutes);
   app.use('/api/users', usersAdminRoutes);
+  app.use('/api/account-deletion', accountDeletionAdminRoutes);
   app.use('/api/partners', partnersAdminRoutes);
   app.use('/api/wallet', walletAdminRoutes);
   app.use('/api/rewards', rewardsAdminRoutes);

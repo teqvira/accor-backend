@@ -32,6 +32,7 @@ export interface IUser {
   garageName?: string;
   garageOwnerName?: string;
   profileCompleted: boolean;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +61,7 @@ interface UserRow {
   garage_name?: string | null;
   garage_owner_name?: string | null;
   profile_completed?: boolean | null;
+  deleted_at?: Date | string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -89,6 +91,7 @@ export function mapUserRow(row: UserRow): IUser {
     garageName: row.garage_name ?? undefined,
     garageOwnerName: row.garage_owner_name ?? undefined,
     profileCompleted: Boolean(row.profile_completed),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -135,4 +138,5 @@ export interface UpdateUserData {
   garageName?: string | null;
   garageOwnerName?: string | null;
   profileCompleted?: boolean;
+  deletedAt?: Date | null;
 }

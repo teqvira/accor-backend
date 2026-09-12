@@ -30,6 +30,12 @@ function navigationFor(
         tab: 1,
         partnerId: String(data.userId ?? referenceId ?? ''),
       };
+    case 'account_deletion':
+      return {
+        screen: 'requests',
+        tab: 1,
+        partnerId: String(data.userId ?? referenceId ?? ''),
+      };
     case 'reward_request':
       return {
         screen: 'rewards',
@@ -264,6 +270,51 @@ export class NotificationsService {
         },
       }),
       'notifyPartnerRequest'
+    );
+  }
+
+  notifyAccountDeletion(input: {
+    userId: string;
+    requestId: string;
+    name?: string;
+    mobileNumber?: string;
+    source: 'app' | 'website' | 'admin';
+    status: 'pending' | 'completed' | 'cancelled';
+    scheduledFor?: Date | null;
+  }): void {
+    const who = input.name?.trim() || input.mobileNumber || 'A partner';
+    const isImmediate = input.status === 'completed';
+    const title = isImmediate
+      ? 'Account deleted'
+      : 'Account deletion requested';
+    const body = isImmediate
+      ? `${who} deleted their account (${input.source})`
+      : `${who} requested account deletion from the website (holds for 4 days)`;
+
+    fireAndForget(
+      this.createAndPush({
+        title,
+        body,
+        type: 'account_deletion',
+        audience: 'admin',
+        referenceType: 'account_deletion_request',
+        referenceId: input.requestId,
+        data: {
+          screen: 'requests',
+          tab: 1,
+          partnerId: input.userId,
+          userId: input.userId,
+          requestId: input.requestId,
+          name: input.name ?? null,
+          mobileNumber: input.mobileNumber ?? null,
+          source: input.source,
+          status: input.status,
+          scheduledFor: input.scheduledFor
+            ? input.scheduledFor.toISOString()
+            : null,
+        },
+      }),
+      'notifyAccountDeletion'
     );
   }
 

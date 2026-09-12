@@ -17,7 +17,7 @@ const USER_PUBLIC_COLUMNS = `
   role, is_active, is_blocked, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   pincode, garage_id, garage_role, garage_name, garage_owner_name,
-  created_at, updated_at
+  deleted_at, created_at, updated_at
 `;
 
 const USER_COLUMNS_WITH_PASSWORD = `
@@ -25,7 +25,7 @@ const USER_COLUMNS_WITH_PASSWORD = `
   role, is_active, is_blocked, is_verified, approval_status,
   avatar_url, date_of_birth, city, state, user_type, profile_completed,
   pincode, garage_id, garage_role, garage_name, garage_owner_name,
-  created_at, updated_at
+  deleted_at, created_at, updated_at
 `;
 
 function mapOptionalRow(
@@ -74,7 +74,7 @@ const PARTNER_USER_COLUMNS = `
   u.role, u.is_active, u.is_blocked, u.is_verified, u.approval_status,
   u.avatar_url, u.date_of_birth, u.city, u.state, u.user_type, u.profile_completed,
   u.pincode, u.garage_id, u.garage_role, u.garage_name, u.garage_owner_name,
-  u.created_at, u.updated_at
+  u.deleted_at, u.created_at, u.updated_at
 `;
 
 const PARTNER_SELECT = `
@@ -266,6 +266,10 @@ export const userRepository = {
     if (data.profileCompleted !== undefined) {
       sets.push(`profile_completed = $${paramIndex++}`);
       values.push(data.profileCompleted);
+    }
+    if (data.deletedAt !== undefined) {
+      sets.push(`deleted_at = $${paramIndex++}`);
+      values.push(data.deletedAt);
     }
 
     if (sets.length === 0) {
