@@ -1,5 +1,5 @@
 export type AccountDeletionSource = 'app' | 'website' | 'admin';
-export type AccountDeletionStatus = 'pending' | 'deleted' | 'cancelled';
+export type AccountDeletionStatus = 'pending' | 'completed' | 'cancelled';
 
 export interface IAccountDeletionRequest {
   _id: string;

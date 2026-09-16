@@ -279,11 +279,11 @@ export class NotificationsService {
     name?: string;
     mobileNumber?: string;
     source: 'app' | 'website' | 'admin';
-    status: 'pending' | 'deleted' | 'cancelled';
+    status: 'pending' | 'completed' | 'cancelled';
     scheduledFor?: Date | null;
   }): void {
     const who = input.name?.trim() || input.mobileNumber || 'A partner';
-    const isImmediate = input.status === 'deleted';
+    const isImmediate = input.status === 'completed';
     const title = isImmediate
       ? 'Account deleted'
       : 'Account deletion requested';

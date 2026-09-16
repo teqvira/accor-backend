@@ -42,7 +42,7 @@ function sanitizeRequest(request: IAccountDeletionRequest) {
     userId: request.userId,
     mobileNumber: request.mobileNumber,
     source: request.source,
-    status: request.status,
+    status: request.status === 'completed' ? 'deleted' : request.status,
     reason: request.reason ?? null,
     requestedAt: request.requestedAt,
     scheduledFor: request.scheduledFor ?? null,
@@ -57,6 +57,7 @@ function sanitizeRequest(request: IAccountDeletionRequest) {
       email: request.userEmail ?? null,
       isActive: request.userIsActive ?? null,
       deletedAt: request.userDeletedAt ?? null,
+      status: request.userDeletedAt ? 'deleted' : (request.userIsActive ? 'active' : 'inactive'),
     },
   };
 }
@@ -110,7 +111,7 @@ export class AccountDeletionService {
       userId,
       mobileNumber: user.mobileNumber,
       source: 'app',
-      status: 'deleted',
+      status: 'completed',
       reason: reason ?? null,
       scheduledFor: null,
       processedAt: new Date(),
@@ -122,7 +123,7 @@ export class AccountDeletionService {
       name: user.name,
       mobileNumber: user.mobileNumber,
       source: 'app',
-      status: 'deleted',
+      status: 'completed',
       scheduledFor: null,
     });
 
@@ -287,6 +288,9 @@ export class AccountDeletionService {
   }
 
   async listForAdmin(filters: AccountDeletionListFilters) {
+    if (filters.status === ('deleted' as any)) {
+      filters.status = 'completed';
+    }
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
     const { items, total } = await accountDeletionRepository.findAll({
