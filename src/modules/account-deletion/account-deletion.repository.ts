@@ -133,7 +133,7 @@ export const accountDeletionRepository = {
   ): Promise<IAccountDeletionRequest | null> => {
     const result = await pool.query<DeletionRequestRow>(
       `UPDATE account_deletion_requests
-       SET status = 'completed',
+       SET status = 'deleted',
            processed_at = NOW(),
            processed_by = COALESCE($2, processed_by),
            updated_at = NOW()
@@ -167,7 +167,7 @@ export const accountDeletionRepository = {
   ): Promise<void> => {
     await pool.query(
       `UPDATE account_deletion_requests
-       SET status = 'completed',
+       SET status = 'deleted',
            processed_at = NOW(),
            processed_by = COALESCE($2, processed_by),
            updated_at = NOW()

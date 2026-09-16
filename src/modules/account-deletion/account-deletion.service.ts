@@ -110,7 +110,7 @@ export class AccountDeletionService {
       userId,
       mobileNumber: user.mobileNumber,
       source: 'app',
-      status: 'completed',
+      status: 'deleted',
       reason: reason ?? null,
       scheduledFor: null,
       processedAt: new Date(),
@@ -122,7 +122,7 @@ export class AccountDeletionService {
       name: user.name,
       mobileNumber: user.mobileNumber,
       source: 'app',
-      status: 'completed',
+      status: 'deleted',
       scheduledFor: null,
     });
 

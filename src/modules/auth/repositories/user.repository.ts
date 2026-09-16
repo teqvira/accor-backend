@@ -373,7 +373,7 @@ export const userRepository = {
       search?: string;
     } = {}
   ): Promise<{ items: PartnerListItem[]; total: number }> => {
-    const conditions: string[] = [`u.role = 'user'`];
+    const conditions: string[] = [`u.role = 'user'`, `u.deleted_at IS NULL`];
     const values: unknown[] = [];
     let i = 1;
 

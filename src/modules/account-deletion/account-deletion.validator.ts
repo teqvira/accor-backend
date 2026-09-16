@@ -25,7 +25,7 @@ export const appDeleteAccountSchema = z.preprocess(
 export const listDeletionRequestsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
-  status: z.enum(['pending', 'completed', 'cancelled']).optional(),
+  status: z.enum(['pending', 'deleted', 'cancelled']).optional(),
   source: z.enum(['app', 'website', 'admin']).optional(),
   search: z.string().trim().min(1).max(200).optional(),
 });
