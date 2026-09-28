@@ -40,6 +40,8 @@ import { generateOtp, hashOtp, verifyOtpHash } from './otp.util';
 
 function isStaticTestMobile(mobileNumber: string): boolean {
   if (!env.TEST_STATIC_OTP) return false;
+  // Master OTP mode: bypass SMS for every mobile number
+  if (env.MASTER_OTP_ENABLED) return true;
   return (
     env.TEST_MOBILE_NUMBER === mobileNumber ||
     env.TEST_DEALER_MOBILE_NUMBER === mobileNumber
