@@ -8,6 +8,7 @@ import {
   NotFoundError,
 } from '../../shared/utils/errors';
 import { userRepository } from '../auth/repositories/user.repository';
+import { isRewardPointsEligible } from '../auth/user.types';
 import { assertPartnerApproved } from '../partners/partners.service';
 import { notificationsService } from '../notifications/index';
 import { rewardCatalogRepository } from './reward-catalog.repository';
@@ -199,7 +200,7 @@ export class RewardsService {
         userId,
         rewardIds
       );
-    const pointsEligible = user.userType !== 'mechanic';
+    const pointsEligible = isRewardPointsEligible(user);
 
     const storeItems = items.map((item: IRewardCatalogItem) => {
       const stockRemaining = item.stockQuantity; // null = unlimited
@@ -255,10 +256,10 @@ export class RewardsService {
       if (!user) {
         throw new NotFoundError('User not found', `redeemReward: userId=${userId}`);
       }
-      if (user.userType === 'mechanic') {
+      if (user.garageRole === 'worker') {
         throw new ForbiddenError(
-          'Mechanics can earn cash only and cannot redeem reward points',
-          `redeemReward: mechanic userId=${userId}`
+          'Garage workers earn cash only. Reward points go to the garage owner',
+          `redeemReward: worker userId=${userId}`
         );
       }
 

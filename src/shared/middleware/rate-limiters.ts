@@ -24,12 +24,14 @@ export const redemptionLimiter = rateLimit({
 
 export const withdrawLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 20,
+  // Failed attempts (min amount, validation, etc.) must not lock the user out.
+  skipFailedRequests: true,
   message: {
     success: false,
     message: 'Too many withdrawal requests. Please try again later',
     developerMessage:
-      'Rate limit exceeded on wallet withdrawal routes (10 requests per 15 minutes)',
+      'Rate limit exceeded on wallet withdrawal routes (20 requests per 15 minutes)',
   },
 });
 

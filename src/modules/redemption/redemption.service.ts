@@ -16,7 +16,6 @@ import { qrCodeRepository } from '../qr/repositories/qr-code.repository';
 import { rewardsService } from '../rewards/rewards.service';
 import { redemptionTransactionRepository } from '../transactions/redemption-transaction.repository';
 import { userRepository } from '../auth/repositories/user.repository';
-import { IUser } from '../auth/user.types';
 import { otpVerificationRepository } from '../auth/repositories/otp-verification.repository';
 import { generateOtp, hashOtp, verifyOtpHash } from '../auth/otp.util';
 import { walletService } from '../wallet/wallet.service';
@@ -81,10 +80,6 @@ async function resolvePointsRecipient(
   };
 }
 
-function earnsRewardPoints(user: IUser): boolean {
-  return user.userType !== 'mechanic';
-}
-
 export class RedemptionService {
   async validateCode(code: string, userId?: string) {
     const qrCode = await qrCodeRepository.findByCode(code);
@@ -137,10 +132,10 @@ export class RedemptionService {
     const effectiveWalletAmount = Number(
       (batch.walletAmount * cashMultiplier).toFixed(2)
     );
-    const mechanicCashOnly = scanner ? !earnsRewardPoints(scanner) : false;
-    const effectiveRewardPoints = mechanicCashOnly
-      ? 0
-      : Math.round(batch.rewardPoints * pointsMultiplier);
+    // Cash → scanner. Points → garage owner when a worker scans; otherwise scanner.
+    const effectiveRewardPoints = Math.round(
+      batch.rewardPoints * pointsMultiplier
+    );
     const pointsRecipient = scanner
       ? await resolvePointsRecipient(scanner)
       : {
@@ -162,22 +157,17 @@ export class RedemptionService {
         id: batch._id,
         name: batch.name,
         baseWalletAmount: batch.walletAmount,
-        baseRewardPoints: mechanicCashOnly ? 0 : batch.rewardPoints,
+        baseRewardPoints: batch.rewardPoints,
         walletAmount: effectiveWalletAmount,
         rewardPoints: effectiveRewardPoints,
       },
       campaign: campaignPayload(activeCampaign),
       allocation: {
         cashTo: 'self',
-        pointsTo: mechanicCashOnly
-          ? 'none'
-          : pointsRecipient.isScanner
-            ? 'self'
-            : 'owner',
-        pointsRecipientName:
-          mechanicCashOnly || pointsRecipient.isScanner
-            ? null
-            : pointsRecipient.name,
+        pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
+        pointsRecipientName: pointsRecipient.isScanner
+          ? null
+          : pointsRecipient.name,
       },
       redeemable: true,
     };
@@ -346,10 +336,10 @@ export class RedemptionService {
       const effectiveWalletAmount = Number(
         (batch.walletAmount * cashMultiplier).toFixed(2)
       );
-      const mechanicCashOnly = !earnsRewardPoints(scanner);
-      const effectiveRewardPoints = mechanicCashOnly
-        ? 0
-        : Math.round(batch.rewardPoints * pointsMultiplier);
+      // Cash → scanner. Points → garage owner when a worker scans; otherwise scanner.
+      const effectiveRewardPoints = Math.round(
+        batch.rewardPoints * pointsMultiplier
+      );
       const pointsRecipient = await resolvePointsRecipient(scanner, client);
 
       if (
@@ -442,15 +432,10 @@ export class RedemptionService {
               : null,
             allocation: {
               cashTo: 'self',
-              pointsTo: mechanicCashOnly
-                ? 'none'
-                : pointsRecipient.isScanner
-                  ? 'self'
-                  : 'owner',
-              pointsRecipientName:
-                mechanicCashOnly || pointsRecipient.isScanner
-                  ? null
-                  : pointsRecipient.name,
+              pointsTo: pointsRecipient.isScanner ? 'self' : 'owner',
+              pointsRecipientName: pointsRecipient.isScanner
+                ? null
+                : pointsRecipient.name,
             },
             redeemedAt: updatedQr.redeemedAt,
           },

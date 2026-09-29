@@ -330,7 +330,7 @@ export const userRepository = {
    * Reset to:  is_active=true, is_blocked=false, is_verified=true,
    *            approval_status='pending', profile_completed=false
    */
-  resetToFreshUser: async (id: string, mobileNumber: string): Promise<IUser | null> => {
+  resetToFreshUser: async (id: string, _mobileNumber: string): Promise<IUser | null> => {
     const result = await pool.query<UserRow>(
       `UPDATE users
        SET
@@ -358,7 +358,7 @@ export const userRepository = {
          updated_at         = NOW()
        WHERE id = $1
        RETURNING ${USER_PUBLIC_COLUMNS}`,
-      [id, `User ${mobileNumber.slice(-4)}`]
+      [id, '']
     );
     return mapOptionalRow(result.rows[0]);
   },

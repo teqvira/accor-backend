@@ -359,7 +359,7 @@ export class AuthService {
         const created = await userRepository.create({
           mobileNumber,
           role: UserRole.USER,
-          name: `User ${mobileNumber.slice(-4)}`,
+          name: '',
           approvalStatus: 'pending',
         });
         user = (await userRepository.findByMobileIncludingDeleted(mobileNumber)) ?? created;

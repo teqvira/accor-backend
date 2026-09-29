@@ -8,6 +8,20 @@ export type UserType = 'mechanic' | 'dealer';
 export type GarageRole = 'owner' | 'worker';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
+/**
+ * Dealers and garage owners can view/redeem reward points.
+ * Garage workers receive cash on scan; their points go to the owner.
+ */
+export function isRewardPointsEligible(
+  user: Pick<IUser, 'userType' | 'garageRole'>
+): boolean {
+  if (user.userType === 'dealer') return true;
+  if (user.userType === 'mechanic') {
+    return user.garageRole !== 'worker';
+  }
+  return false;
+}
+
 export interface IUser {
   _id: string;
   name?: string;

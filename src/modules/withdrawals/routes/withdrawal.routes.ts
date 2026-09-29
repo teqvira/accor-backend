@@ -26,7 +26,6 @@ router.post(
 
 router.get(
   '/payout-profile',
-  withdrawLimiter,
   ...userOnly,
   asyncHandler<AuthRequest>((req, res) =>
     withdrawalController.getPayoutProfile(req, res)
@@ -65,7 +64,6 @@ router.post(
 
 router.get(
   '/withdrawals',
-  withdrawLimiter,
   ...userOnly,
   asyncHandler<AuthRequest>((req, res) =>
     withdrawalController.listWithdrawals(req, res)

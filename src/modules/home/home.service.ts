@@ -1,6 +1,7 @@
 import { NotFoundError } from '../../shared/utils/errors';
 import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
+import { isRewardPointsEligible } from '../auth/user.types';
 import { campaignsService } from '../campaigns/campaigns.service';
 import { homeRepository } from './home.repository';
 import { HomeResponse } from './home.types';
@@ -38,7 +39,7 @@ export class HomeService {
       balances: {
         walletBalance: user.walletBalance,
         rewardPoints: user.rewardPoints,
-        pointsEligible: user.userType !== 'mechanic',
+        pointsEligible: isRewardPointsEligible(user),
       },
       stats: {
         totalScans,
