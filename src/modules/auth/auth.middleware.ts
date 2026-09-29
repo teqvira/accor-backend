@@ -9,6 +9,7 @@ import {
 import { AuthRequest } from './auth.types';
 import { UserRole } from './user.types';
 import { verifyAccessToken } from './jwt.util';
+import { userRepository } from './repositories/user.repository';
 
 export function authenticate(
   req: AuthRequest,
@@ -24,10 +25,10 @@ export function authenticate(
       )
     );
   }
+
+  let payload: ReturnType<typeof verifyAccessToken>;
   try {
-    req.user = verifyAccessToken(token);
-    // Keep FCM token fresh on every authenticated API call
-    syncDeviceToken(req, res, next);
+    payload = verifyAccessToken(token);
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'unknown';
     return next(
@@ -37,6 +38,50 @@ export function authenticate(
       )
     );
   }
+
+  // DB check: ensure the account is still active (handles deleted/deactivated users
+  // whose JWT hasn't expired yet — access tokens are short-lived but we must
+  // immediately block them after account deletion is approved).
+  userRepository
+    .findById(payload.sub)
+    .then((liveUser) => {
+      if (!liveUser) {
+        return next(
+          new UnauthorizedError(
+            'Your account no longer exists. Please log in again',
+            `authenticate: user not found in DB userId=${payload.sub}`
+          )
+        );
+      }
+      if (liveUser.deletedAt) {
+        return next(
+          new UnauthorizedError(
+            'Your account has been deleted',
+            `authenticate: deleted user userId=${payload.sub}`
+          )
+        );
+      }
+      if (!liveUser.isActive) {
+        return next(
+          new UnauthorizedError(
+            'Your account has been deactivated. Please contact support',
+            `authenticate: inactive user userId=${payload.sub}`
+          )
+        );
+      }
+      if (liveUser.isBlocked) {
+        return next(
+          new UnauthorizedError(
+            'Your account has been blocked. Please contact support',
+            `authenticate: blocked user userId=${payload.sub}`
+          )
+        );
+      }
+      req.user = payload;
+      // Keep FCM token fresh on every authenticated API call
+      syncDeviceToken(req, res, next);
+    })
+    .catch((err: unknown) => next(err));
 }
 
 export function optionalAuthenticate(

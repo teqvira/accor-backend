@@ -115,4 +115,13 @@ export const userDocumentRepository = {
     );
     return mapDocumentRow(result.rows[0]);
   },
+
+  /**
+   * Hard-deletes all document rows for a user.
+   * Used when a previously deleted user re-registers so they start
+   * with a completely clean document slate.
+   */
+  deleteByUserId: async (userId: string): Promise<void> => {
+    await pool.query(`DELETE FROM user_documents WHERE user_id = $1`, [userId]);
+  },
 };

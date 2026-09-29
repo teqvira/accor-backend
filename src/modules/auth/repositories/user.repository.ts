@@ -145,8 +145,30 @@ export const userRepository = {
       ? USER_COLUMNS_WITH_PASSWORD
       : USER_PUBLIC_COLUMNS;
     const result = await pool.query<UserRow>(
-      `SELECT ${columns} FROM users WHERE mobile_number = $1`,
+      `SELECT ${columns} FROM users WHERE mobile_number = $1 AND deleted_at IS NULL`,
       [mobileNumber]
+    );
+    return mapOptionalRow(result.rows[0]);
+  },
+
+  /** Finds a user by mobile including soft-deleted rows (used for re-registration checks). */
+  findByMobileIncludingDeleted: async (
+    mobileNumber: string
+  ): Promise<IUser | null> => {
+    const result = await pool.query<UserRow>(
+      `SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE mobile_number = $1`,
+      [mobileNumber]
+    );
+    return mapOptionalRow(result.rows[0]);
+  },
+
+  /** Finds a user by email including soft-deleted rows (used for partner create duplicate check). */
+  findByEmailIncludingDeleted: async (
+    email: string
+  ): Promise<IUser | null> => {
+    const result = await pool.query<UserRow>(
+      `SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE email = $1`,
+      [email.toLowerCase()]
     );
     return mapOptionalRow(result.rows[0]);
   },
@@ -292,6 +314,51 @@ export const userRepository = {
        WHERE id = $1
        RETURNING ${USER_PUBLIC_COLUMNS}`,
       [id]
+    );
+    return mapOptionalRow(result.rows[0]);
+  },
+
+  /**
+   * Resets a previously soft-deleted user to a completely fresh state so
+   * re-registration after account deletion starts with zero history.
+   *
+   * Preserved: id, mobile_number (identity key), role
+   * Wiped:     name, email, password_hash, wallet_balance, reward_points,
+   *            avatar_url, date_of_birth, city, state, pincode, user_type,
+   *            profile_completed, garage_id, garage_role, garage_name,
+   *            garage_owner_name, deleted_at
+   * Reset to:  is_active=true, is_blocked=false, is_verified=true,
+   *            approval_status='pending', profile_completed=false
+   */
+  resetToFreshUser: async (id: string, mobileNumber: string): Promise<IUser | null> => {
+    const result = await pool.query<UserRow>(
+      `UPDATE users
+       SET
+         name               = $2,
+         email              = NULL,
+         password_hash      = NULL,
+         wallet_balance     = 0,
+         reward_points      = 0,
+         is_active          = true,
+         is_blocked         = false,
+         is_verified        = true,
+         approval_status    = 'pending',
+         avatar_url         = NULL,
+         date_of_birth      = NULL,
+         city               = NULL,
+         state              = NULL,
+         pincode            = NULL,
+         user_type          = NULL,
+         profile_completed  = false,
+         garage_id          = NULL,
+         garage_role        = NULL,
+         garage_name        = NULL,
+         garage_owner_name  = NULL,
+         deleted_at         = NULL,
+         updated_at         = NOW()
+       WHERE id = $1
+       RETURNING ${USER_PUBLIC_COLUMNS}`,
+      [id, `User ${mobileNumber.slice(-4)}`]
     );
     return mapOptionalRow(result.rows[0]);
   },

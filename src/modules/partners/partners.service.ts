@@ -73,34 +73,84 @@ export class PartnersService {
       );
     }
 
+    // Check if a soft-deleted user already exists with the same mobile or email.
+    // If so, restore that user instead of inserting a duplicate (which would hit
+    // the unique constraint and surface a misleading "already registered" error).
+    const existingByMobile = await userRepository.findByMobileIncludingDeleted(
+      input.mobileNumber
+    );
+    const existingByEmail = input.email
+      ? await userRepository.findByEmailIncludingDeleted(
+          input.email.trim().toLowerCase()
+        )
+      : null;
+
+    const deletedUser =
+      (existingByMobile?.deletedAt ? existingByMobile : null) ??
+      (existingByEmail?.deletedAt ? existingByEmail : null);
+
+    // If a non-deleted user already exists with this mobile/email, surface a conflict.
+    const activeConflict =
+      (existingByMobile && !existingByMobile.deletedAt) ||
+      (existingByEmail && !existingByEmail.deletedAt);
+
+    if (activeConflict) {
+      throw new ConflictError(
+        'Mobile number or email is already registered',
+        'createPartner: active user exists with same mobile or email'
+      );
+    }
+
     try {
-      const created = await userRepository.create({
-        name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
-        mobileNumber: input.mobileNumber,
-        role: UserRole.USER,
-        userType: input.userType,
-        city: input.city?.trim(),
-        state: input.state?.trim(),
-        isVerified: true,
-        approvalStatus: 'approved',
-        profileCompleted: true,
-      });
+      let partnerId: string;
+
+      if (deletedUser) {
+        // Restore the soft-deleted row with the new details.
+        await userRepository.update(deletedUser._id, {
+          name: input.name.trim(),
+          email: input.email ? input.email.trim().toLowerCase() : null,
+          mobileNumber: input.mobileNumber,
+          userType: input.userType,
+          city: input.city?.trim() ?? null,
+          state: input.state?.trim() ?? null,
+          isVerified: true,
+          isActive: true,
+          isBlocked: false,
+          approvalStatus: 'approved',
+          profileCompleted: true,
+          deletedAt: null,
+        });
+        partnerId = deletedUser._id;
+      } else {
+        const created = await userRepository.create({
+          name: input.name.trim(),
+          email: input.email.trim().toLowerCase(),
+          mobileNumber: input.mobileNumber,
+          role: UserRole.USER,
+          userType: input.userType,
+          city: input.city?.trim(),
+          state: input.state?.trim(),
+          isVerified: true,
+          approvalStatus: 'approved',
+          profileCompleted: true,
+        });
+        partnerId = created._id;
+      }
 
       await userDocumentRepository.upsertByUserAndType({
-        userId: created._id,
+        userId: partnerId,
         documentType: 'aadhaar',
         documentFront: input.aadhaarUrl,
         status: 'approved',
       });
       await userDocumentRepository.upsertByUserAndType({
-        userId: created._id,
+        userId: partnerId,
         documentType: 'pan',
         documentFront: input.panUrl,
         status: 'approved',
       });
 
-      return this.getById(created._id);
+      return this.getById(partnerId);
     } catch (err: unknown) {
       if (isPgUniqueViolation(err)) {
         throw new ConflictError(

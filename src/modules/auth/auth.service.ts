@@ -37,6 +37,7 @@ import {
   verifyResetToken,
 } from './jwt.util';
 import { generateOtp, hashOtp, verifyOtpHash } from './otp.util';
+import { userDocumentRepository } from '../users/user-document.repository';
 
 function isStaticTestMobile(mobileNumber: string): boolean {
   if (!env.TEST_STATIC_OTP) return false;
@@ -348,9 +349,12 @@ export class AuthService {
 
   async sendMobileOtp(mobileNumber: string, loggedInUserId?: string) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    let user = await userRepository.findByMobile(mobileNumber);
+
+    // Use the including-deleted variant so soft-deleted users can re-register.
+    let user = await userRepository.findByMobileIncludingDeleted(mobileNumber);
 
     if (!user) {
+      // Brand-new mobile — create a stub user row.
       try {
         const created = await userRepository.create({
           mobileNumber,
@@ -358,12 +362,12 @@ export class AuthService {
           name: `User ${mobileNumber.slice(-4)}`,
           approvalStatus: 'pending',
         });
-        user = (await userRepository.findByMobile(mobileNumber)) ?? created;
+        user = (await userRepository.findByMobileIncludingDeleted(mobileNumber)) ?? created;
       } catch (err: unknown) {
         if (!isPgUniqueViolation(err)) {
           throw err;
         }
-        user = await userRepository.findByMobile(mobileNumber);
+        user = await userRepository.findByMobileIncludingDeleted(mobileNumber);
       }
     }
 
@@ -374,7 +378,14 @@ export class AuthService {
       );
     }
 
-    assertAccountAccessible(user, 'sendMobileOtp');
+    // Blocked users are always rejected — deleted/inactive users are allowed through
+    // because they may be re-registering (deletedAt will be cleared on OTP verify).
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `sendMobileOtp: blocked userId=${user._id}`
+      );
+    }
 
     await assertOtpResendAllowed({ mobileNumber, purpose: 'login' });
 
@@ -403,7 +414,9 @@ export class AuthService {
     ctx: DeviceSessionContext = {}
   ) {
     await this.assertLoggedInMobileMatch(mobileNumber, loggedInUserId);
-    const user = await userRepository.findByMobile(mobileNumber);
+
+    // Use the including-deleted variant so soft-deleted users can complete re-registration.
+    const user = await userRepository.findByMobileIncludingDeleted(mobileNumber);
     const otpRecord = await otpVerificationRepository.findLatestActive({
       mobileNumber,
       purpose: 'login',
@@ -419,7 +432,13 @@ export class AuthService {
       );
     }
 
-    assertAccountAccessible(user, 'verifyMobileOtp');
+    // Blocked users are always rejected even during OTP verify.
+    if (user.isBlocked) {
+      throw new UnauthorizedError(
+        'Your account has been blocked. Please contact support',
+        `verifyMobileOtp: blocked userId=${user._id}`
+      );
+    }
 
     if (!otpRecord && !staticOtpOk) {
       throw new BadRequestError(
@@ -440,6 +459,33 @@ export class AuthService {
     if (otpRecord) {
       await otpVerificationRepository.markVerified(otpRecord._id);
     }
+
+    // If the user was previously soft-deleted, treat this as a fresh new account.
+    // We must wipe ALL old profile data and documents so the re-registering user
+    // starts completely clean — no previous wallet balance, points, docs, or profile.
+    if (user.deletedAt || !user.isActive) {
+      // 1. Hard-delete all KYC documents so the user must re-upload them.
+      await userDocumentRepository.deleteByUserId(user._id);
+
+      // 2. Reset every profile/financial field to defaults in one atomic query.
+      //    Preserves: id, mobile_number, role.
+      //    Zeros:     wallet_balance, reward_points.
+      //    Nulls:     name→placeholder, email, password, avatar, dob, city,
+      //               state, pincode, user_type, garage fields, deleted_at.
+      const freshUser = await userRepository.resetToFreshUser(user._id, mobileNumber);
+      if (!freshUser) {
+        throw new BadRequestError(
+          'Unable to process request',
+          `verifyMobileOtp: resetToFreshUser failed userId=${user._id}`
+        );
+      }
+      const tokens = await issueTokenPair(freshUser, ctx);
+      return {
+        user: sanitizeUser(freshUser),
+        ...tokens,
+      };
+    }
+
     const verifiedUser = await userRepository.markVerified(user._id);
     if (!verifiedUser) {
       throw new BadRequestError(
