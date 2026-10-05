@@ -177,8 +177,9 @@ export const userRepository = {
     const result = await pool.query<UserRow>(
       `INSERT INTO users
          (name, email, mobile_number, password_hash, role, is_active, is_blocked, is_verified,
-          approval_status, city, state, user_type, profile_completed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          approval_status, city, state, user_type, profile_completed,
+          pincode, garage_id, garage_role, garage_name, garage_owner_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING ${USER_PUBLIC_COLUMNS}`,
       [
         data.name ?? null,
@@ -194,6 +195,11 @@ export const userRepository = {
         data.state ?? null,
         data.userType ?? null,
         data.profileCompleted ?? false,
+        data.pincode ?? null,
+        data.garageId ?? null,
+        data.garageRole ?? null,
+        data.garageName ?? null,
+        data.garageOwnerName ?? null,
       ]
     );
     return mapUserRow(result.rows[0]);

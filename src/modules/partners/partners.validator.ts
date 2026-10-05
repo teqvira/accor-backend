@@ -23,22 +23,54 @@ export const listPartnersQuerySchema = z.object({
   search: z.string().trim().min(1).max(200).optional(),
 });
 
-export const createPartnerSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  mobileNumber: mobileNumberSchema,
-  userType: z.enum(['mechanic', 'dealer']),
-  email: z.string().trim().email(),
-  city: z.string().trim().min(2).max(100).optional(),
-  state: z.string().trim().min(2).max(100).optional(),
-  aadhaarUrl: z.string().trim().url('Aadhaar document upload is required'),
-  panUrl: z.string().trim().url('PAN document upload is required'),
-});
+export const createPartnerSchema = z
+  .object({
+    name: z.string().trim().min(2).max(100),
+    mobileNumber: mobileNumberSchema,
+    userType: z.enum(['mechanic', 'dealer']),
+    garageRole: z.enum(['owner', 'worker']).optional().nullable(),
+    garageName: z.string().trim().min(2).max(255).optional().nullable(),
+    garageOwnerName: z.string().trim().min(2).max(100).optional().nullable(),
+    email: z.string().trim().email(),
+    city: z.string().trim().min(2).max(100).optional(),
+    state: z.string().trim().min(2).max(100).optional(),
+    aadhaarUrl: z.string().trim().url('Aadhaar document upload is required'),
+    panUrl: z.string().trim().url('PAN document upload is required'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.userType === 'mechanic') {
+      if (!data.garageRole) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageRole'],
+          message: 'Mechanic type (Garage Owner or Worker) is required',
+        });
+      }
+      if (data.garageRole === 'owner' && !data.garageName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageName'],
+          message: 'Garage name is required for Garage Owner',
+        });
+      }
+      if (data.garageRole === 'worker' && !data.garageOwnerName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageOwnerName'],
+          message: 'Garage owner name is required for Worker',
+        });
+      }
+    }
+  });
 
 export const updatePartnerSchema = z
   .object({
     name: z.string().trim().min(2).max(100).optional(),
     mobileNumber: mobileNumberSchema.optional(),
     userType: z.enum(['mechanic', 'dealer']).optional(),
+    garageRole: z.enum(['owner', 'worker']).optional().nullable(),
+    garageName: z.string().trim().min(2).max(255).optional().nullable(),
+    garageOwnerName: z.string().trim().min(2).max(100).optional().nullable(),
     email: z.string().trim().email().optional(),
     city: z.string().trim().min(2).max(100).optional().nullable(),
     state: z.string().trim().min(2).max(100).optional().nullable(),
@@ -47,6 +79,32 @@ export const updatePartnerSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field is required to update',
+  })
+  .superRefine((data, ctx) => {
+    if (data.userType === 'mechanic' || data.garageRole) {
+      if (
+        data.garageRole === 'owner' &&
+        data.garageName !== undefined &&
+        !data.garageName?.trim()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageName'],
+          message: 'Garage name is required for Garage Owner',
+        });
+      }
+      if (
+        data.garageRole === 'worker' &&
+        data.garageOwnerName !== undefined &&
+        !data.garageOwnerName?.trim()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageOwnerName'],
+          message: 'Garage owner name is required for Worker',
+        });
+      }
+    }
   });
 
 export const updatePartnerDocumentsSchema = z

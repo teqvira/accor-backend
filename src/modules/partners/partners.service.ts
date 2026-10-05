@@ -103,6 +103,13 @@ export class PartnersService {
 
     try {
       let partnerId: string;
+      const isMechanic = input.userType === 'mechanic';
+      const garageRole = isMechanic ? input.garageRole ?? null : null;
+      const garageName = isMechanic ? input.garageName?.trim() ?? null : null;
+      const garageOwnerName =
+        isMechanic && input.garageRole === 'worker'
+          ? input.garageOwnerName?.trim() ?? null
+          : null;
 
       if (deletedUser) {
         // Restore the soft-deleted row with the new details.
@@ -111,6 +118,9 @@ export class PartnersService {
           email: input.email ? input.email.trim().toLowerCase() : null,
           mobileNumber: input.mobileNumber,
           userType: input.userType,
+          garageRole,
+          garageName,
+          garageOwnerName,
           city: input.city?.trim() ?? null,
           state: input.state?.trim() ?? null,
           isVerified: true,
@@ -128,6 +138,9 @@ export class PartnersService {
           mobileNumber: input.mobileNumber,
           role: UserRole.USER,
           userType: input.userType,
+          garageRole: garageRole ?? undefined,
+          garageName: garageName ?? undefined,
+          garageOwnerName: garageOwnerName ?? undefined,
           city: input.city?.trim(),
           state: input.state?.trim(),
           isVerified: true,
@@ -135,6 +148,34 @@ export class PartnersService {
           profileCompleted: true,
         });
         partnerId = created._id;
+      }
+
+      // Handle garage linkage
+      let garageId: string | null = null;
+      if (isMechanic && garageRole === 'owner' && garageName) {
+        garageId = await userRepository.upsertOwnerGarage(partnerId, garageName);
+      } else if (isMechanic && garageRole === 'worker') {
+        const owner = await userRepository.findGarageOwnerForWorker({
+          _id: partnerId,
+          role: UserRole.USER,
+          walletBalance: 0,
+          rewardPoints: 0,
+          isActive: true,
+          isBlocked: false,
+          isVerified: true,
+          approvalStatus: 'approved',
+          profileCompleted: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          garageRole: 'worker',
+          garageName: garageName ?? undefined,
+          garageOwnerName: garageOwnerName ?? undefined,
+        });
+        garageId = owner?.garageId ?? null;
+      }
+
+      if (garageId) {
+        await userRepository.update(partnerId, { garageId });
       }
 
       await userDocumentRepository.upsertByUserAndType({
@@ -163,7 +204,7 @@ export class PartnersService {
   }
 
   async update(id: string, input: UpdatePartnerInput) {
-    await getPartnerOrThrow(id);
+    const current = await getPartnerOrThrow(id);
 
     if (input.aadhaarUrl && !isOwnBucketObjectUrl(input.aadhaarUrl)) {
       throw new BadRequestError(
@@ -179,6 +220,54 @@ export class PartnersService {
     }
 
     try {
+      const effectiveUserType =
+        input.userType !== undefined ? input.userType : current.userType;
+      const isMechanic = effectiveUserType === 'mechanic';
+
+      let garageRole =
+        input.garageRole !== undefined ? input.garageRole : current.garageRole;
+      let garageName =
+        input.garageName !== undefined
+          ? input.garageName?.trim() ?? null
+          : current.garageName;
+      let garageOwnerName =
+        input.garageOwnerName !== undefined
+          ? input.garageOwnerName?.trim() ?? null
+          : current.garageOwnerName;
+
+      if (!isMechanic) {
+        garageRole = null;
+        garageName = null;
+        garageOwnerName = null;
+      } else if (garageRole === 'owner') {
+        garageOwnerName = null;
+      }
+
+      let garageId = current.garageId ?? null;
+      if (isMechanic && garageRole === 'owner' && garageName) {
+        garageId = await userRepository.upsertOwnerGarage(id, garageName);
+      } else if (isMechanic && garageRole === 'worker') {
+        const owner = await userRepository.findGarageOwnerForWorker({
+          _id: id,
+          role: UserRole.USER,
+          walletBalance: 0,
+          rewardPoints: 0,
+          isActive: true,
+          isBlocked: false,
+          isVerified: true,
+          approvalStatus: 'approved',
+          profileCompleted: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          garageRole: 'worker',
+          garageName: garageName ?? undefined,
+          garageOwnerName: garageOwnerName ?? undefined,
+        });
+        garageId = owner?.garageId ?? null;
+      } else if (!isMechanic) {
+        garageId = null;
+      }
+
       await userRepository.update(id, {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.email !== undefined
@@ -194,6 +283,10 @@ export class PartnersService {
         ...(input.state !== undefined
           ? { state: input.state ? input.state.trim() : null }
           : {}),
+        garageRole,
+        garageName,
+        garageOwnerName,
+        garageId,
       });
 
       if (input.aadhaarUrl) {

@@ -1,4 +1,4 @@
-import { ApprovalStatus, UserType } from '../auth/user.types';
+import { ApprovalStatus, GarageRole, UserType } from '../auth/user.types';
 import { PartnerListItem } from '../auth/repositories/user.repository';
 
 export interface PartnerListFilters {
@@ -13,6 +13,9 @@ export interface CreatePartnerInput {
   name: string;
   mobileNumber: string;
   userType: UserType;
+  garageRole?: GarageRole | null;
+  garageName?: string | null;
+  garageOwnerName?: string | null;
   email: string;
   city?: string;
   state?: string;
@@ -29,6 +32,9 @@ export interface UpdatePartnerInput {
   name?: string;
   mobileNumber?: string;
   userType?: UserType;
+  garageRole?: GarageRole | null;
+  garageName?: string | null;
+  garageOwnerName?: string | null;
   email?: string;
   city?: string;
   state?: string;
