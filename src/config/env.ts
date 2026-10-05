@@ -32,6 +32,9 @@ const envSchema = z.object({
     .regex(/^[6-9]\d{9}$/)
     .optional(),
   TEST_STATIC_OTP: z.string().min(4).max(8).optional(),
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_TEMPLATE_ID: z.string().optional(),
+  MSG91_SENDER_ID: z.string().optional(),
   /**
    * When set to "true" AND TEST_STATIC_OTP is defined,
    * the static OTP bypasses SMS sending for ALL mobile numbers.
