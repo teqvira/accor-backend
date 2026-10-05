@@ -1,17 +1,20 @@
 export class AppError extends Error {
   public readonly userMessage: string;
   public readonly developerMessage: string;
+  public readonly extra?: Record<string, unknown>;
 
   constructor(
     public statusCode: number,
     userMessage: string,
     developerMessage?: string,
-    public isOperational = true
+    public isOperational = true,
+    extra?: Record<string, unknown>
   ) {
     const devMsg = developerMessage ?? userMessage;
     super(devMsg);
     this.userMessage = userMessage;
     this.developerMessage = devMsg;
+    this.extra = extra;
     this.name = 'AppError';
     Object.setPrototypeOf(this, AppError.prototype);
   }
@@ -47,9 +50,10 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(
     userMessage = 'This action could not be completed due to a conflict',
-    developerMessage?: string
+    developerMessage?: string,
+    extra?: Record<string, unknown>
   ) {
-    super(409, userMessage, developerMessage);
+    super(409, userMessage, developerMessage, true, extra);
   }
 }
 

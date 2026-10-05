@@ -10,4 +10,5 @@ export interface ApiErrorResponse {
   message: string;
   developerMessage: string;
   errors?: Record<string, string[] | undefined>;
+  [key: string]: unknown;
 }

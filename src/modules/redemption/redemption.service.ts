@@ -91,9 +91,24 @@ export class RedemptionService {
     }
 
     if (qrCode.redeemed) {
+      let extraData = {};
+      if (qrCode.redeemedBy) {
+        const redeemer = await userRepository.findById(qrCode.redeemedBy);
+        if (redeemer && redeemer.mobileNumber) {
+          extraData = {
+            redeemedBy: {
+              name: redeemer.name || 'User',
+              mobile: maskMobile(redeemer.mobileNumber),
+              date: qrCode.redeemedAt
+            }
+          };
+        }
+      }
+
       throw new ConflictError(
         'This QR code has already been redeemed',
-        `validateCode: already redeemed code=${code}`
+        `validateCode: already redeemed code=${code}`,
+        extraData
       );
     }
 
@@ -291,9 +306,23 @@ export class RedemptionService {
       }
 
       if (qrCode.redeemed) {
+        let extraData = {};
+        if (qrCode.redeemedBy) {
+          const redeemer = await userRepository.findById(qrCode.redeemedBy, { client });
+          if (redeemer && redeemer.mobileNumber) {
+            extraData = {
+              redeemedBy: {
+                name: redeemer.name || 'User',
+                mobile: maskMobile(redeemer.mobileNumber),
+                date: qrCode.redeemedAt
+              }
+            };
+          }
+        }
         throw new ConflictError(
           'This QR code has already been redeemed',
-          `redeem: already redeemed code=${code}`
+          `redeem: already redeemed code=${code}`,
+          extraData
         );
       }
 

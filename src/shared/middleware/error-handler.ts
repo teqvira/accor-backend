@@ -24,7 +24,7 @@ export function errorHandler(
 ): void {
   if (err instanceof AppError) {
     res.status(err.statusCode).json(
-      buildErrorBody(err.userMessage, err.developerMessage)
+      buildErrorBody(err.userMessage, err.developerMessage, err.extra)
     );
     return;
   }
