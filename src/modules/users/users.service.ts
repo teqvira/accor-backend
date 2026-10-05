@@ -237,6 +237,29 @@ export class UsersService {
         });
       }
 
+      // Handle worker garage transfer notifications
+      if (existing.garageRole === 'worker' && existing.garageId && existing.garageId !== garageId) {
+        const oldOwner = await userRepository.findOwnerByGarageId(existing.garageId);
+        if (oldOwner) {
+          notificationsService.notifyWorkerLeft(
+            { name: updated.name, mobileNumber: updated.mobileNumber },
+            oldOwner._id,
+            oldOwner.name || 'Owner'
+          );
+        }
+      }
+
+      if (isMechanic && input.garageRole === 'worker' && garageId && existing.garageId !== garageId) {
+        const currentNewOwner = await userRepository.findOwnerByGarageId(garageId);
+        if (currentNewOwner) {
+          notificationsService.notifyWorkerJoined(
+            { name: updated.name, mobileNumber: updated.mobileNumber },
+            currentNewOwner._id,
+            currentNewOwner.name || 'Owner'
+          );
+        }
+      }
+
       return {
         user: sanitizeUser(updated),
         documents: sanitizeDocuments(docs),

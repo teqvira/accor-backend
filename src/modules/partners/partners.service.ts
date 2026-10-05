@@ -14,6 +14,7 @@ import { isOwnProfileUploadUrl } from '../file-upload/profile-upload-key';
 import { isOwnBucketObjectUrl } from '../file-upload/product-image-key';
 import { presignedUrlService } from '../file-upload/presigned-url.service';
 import { userDocumentRepository } from '../users/user-document.repository';
+import { notificationsService } from '../notifications/index';
 import {
   CreatePartnerInput,
   PartnerListFilters,
@@ -304,6 +305,29 @@ export class PartnersService {
           documentFront: input.panUrl,
           status: 'approved',
         });
+      }
+
+      // Handle worker garage transfer notifications
+      if (current.garageRole === 'worker' && current.garageId && current.garageId !== garageId) {
+        const oldOwner = await userRepository.findOwnerByGarageId(current.garageId);
+        if (oldOwner) {
+          notificationsService.notifyWorkerLeft(
+            { name: input.name ?? current.name, mobileNumber: current.mobileNumber },
+            oldOwner._id,
+            oldOwner.name || 'Owner'
+          );
+        }
+      }
+
+      if (isMechanic && garageRole === 'worker' && garageId && current.garageId !== garageId) {
+        const currentNewOwner = await userRepository.findOwnerByGarageId(garageId);
+        if (currentNewOwner) {
+          notificationsService.notifyWorkerJoined(
+            { name: input.name ?? current.name, mobileNumber: current.mobileNumber },
+            currentNewOwner._id,
+            currentNewOwner.name || 'Owner'
+          );
+        }
       }
 
       return this.getById(id);

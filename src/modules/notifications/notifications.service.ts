@@ -60,6 +60,9 @@ function navigationFor(
         tab: 0,
         batchId: String(data.batchId ?? referenceId ?? ''),
       };
+    case 'worker_joined':
+    case 'worker_left':
+      return { screen: 'inbox', tab: 0 };
     default:
       return { screen: 'inbox', tab: 0 };
   }
@@ -542,6 +545,50 @@ export class NotificationsService {
   async markAllRead(userId: string) {
     const updated = await notificationRepository.markAllRead(userId);
     return { updated };
+  }
+
+  notifyWorkerJoined(
+    worker: { name?: string; mobileNumber?: string },
+    ownerId: string,
+    ownerName: string
+  ): void {
+    const who = worker.name?.trim() || worker.mobileNumber || 'A worker';
+    fireAndForget(
+      this.createAndPush({
+        title: 'Worker Joined',
+        body: `${who} has joined your garage (${ownerName}).`,
+        type: 'worker_joined',
+        audience: 'user',
+        recipientUserIds: [ownerId],
+        data: {
+          screen: 'inbox',
+          tab: 0,
+        },
+      }),
+      'notifyWorkerJoined'
+    );
+  }
+
+  notifyWorkerLeft(
+    worker: { name?: string; mobileNumber?: string },
+    ownerId: string,
+    ownerName: string
+  ): void {
+    const who = worker.name?.trim() || worker.mobileNumber || 'A worker';
+    fireAndForget(
+      this.createAndPush({
+        title: 'Worker Left',
+        body: `${who} has left your garage (${ownerName}).`,
+        type: 'worker_left',
+        audience: 'user',
+        recipientUserIds: [ownerId],
+        data: {
+          screen: 'inbox',
+          tab: 0,
+        },
+      }),
+      'notifyWorkerLeft'
+    );
   }
 }
 

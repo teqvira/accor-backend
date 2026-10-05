@@ -612,6 +612,20 @@ export const userRepository = {
     );
     return inserted.rows[0].id;
   },
+  findOwnerByGarageId: async (
+    garageId: string,
+    client?: Queryable
+  ): Promise<IUser | null> => {
+    const db = client ?? pool;
+    const byGarage = await db.query<UserRow>(
+      `SELECT ${USER_PUBLIC_COLUMNS}
+       FROM users
+       WHERE id = (SELECT owner_id FROM garages WHERE id = $1)
+       LIMIT 1`,
+      [garageId]
+    );
+    return mapOptionalRow(byGarage.rows[0]);
+  },
 
   findGarageOwnerForWorker: async (
     worker: IUser,
