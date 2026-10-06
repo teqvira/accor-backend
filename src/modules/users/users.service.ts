@@ -124,6 +124,10 @@ export class UsersService {
     };
   }
 
+  async getGarageOwners(search?: string) {
+    return userRepository.findGarageOwners(search);
+  }
+
   async completeProfile(userId: string, input: CompleteProfileInput) {
     const existing = await userRepository.findById(userId);
     if (!existing) {
@@ -177,13 +181,22 @@ export class UsersService {
           input.garageName.trim()
         );
       } else if (isMechanic && input.garageRole === 'worker') {
-        const owner = await userRepository.findGarageOwnerForWorker({
-          ...existing,
-          garageRole: 'worker',
-          garageName: input.garageName?.trim(),
-          garageOwnerName: input.garageOwnerName?.trim(),
-        });
-        garageId = owner?.garageId ?? null;
+        if (input.ownerId) {
+          const owner = await userRepository.findById(input.ownerId);
+          if (owner) {
+            garageId = owner.garageId ?? null;
+            input.garageName = owner.garageName;
+            input.garageOwnerName = owner.name;
+          }
+        } else {
+          const owner = await userRepository.findGarageOwnerForWorker({
+            ...existing,
+            garageRole: 'worker',
+            garageName: input.garageName?.trim(),
+            garageOwnerName: input.garageOwnerName?.trim(),
+          });
+          garageId = owner?.garageId ?? null;
+        }
       }
 
       const updated = await userRepository.update(userId, {

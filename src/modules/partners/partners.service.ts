@@ -106,11 +106,21 @@ export class PartnersService {
       let partnerId: string;
       const isMechanic = input.userType === 'mechanic';
       const garageRole = isMechanic ? input.garageRole ?? null : null;
-      const garageName = isMechanic ? input.garageName?.trim() ?? null : null;
-      const garageOwnerName =
+      let garageName = isMechanic ? input.garageName?.trim() ?? null : null;
+      let garageOwnerName =
         isMechanic && input.garageRole === 'worker'
           ? input.garageOwnerName?.trim() ?? null
           : null;
+      let garageId: string | null = null;
+
+      if (isMechanic && garageRole === 'worker' && input.ownerId) {
+        const owner = await userRepository.findById(input.ownerId);
+        if (owner) {
+          garageId = owner.garageId ?? null;
+          garageName = owner.garageName ?? null;
+          garageOwnerName = owner.name ?? null;
+        }
+      }
 
       if (deletedUser) {
         // Restore the soft-deleted row with the new details.
@@ -152,10 +162,9 @@ export class PartnersService {
       }
 
       // Handle garage linkage
-      let garageId: string | null = null;
       if (isMechanic && garageRole === 'owner' && garageName) {
         garageId = await userRepository.upsertOwnerGarage(partnerId, garageName);
-      } else if (isMechanic && garageRole === 'worker') {
+      } else if (isMechanic && garageRole === 'worker' && !input.ownerId) {
         const owner = await userRepository.findGarageOwnerForWorker({
           _id: partnerId,
           role: UserRole.USER,
@@ -245,9 +254,19 @@ export class PartnersService {
       }
 
       let garageId = current.garageId ?? null;
+
+      if (isMechanic && garageRole === 'worker' && input.ownerId) {
+        const owner = await userRepository.findById(input.ownerId);
+        if (owner) {
+          garageId = owner.garageId ?? null;
+          garageName = owner.garageName ?? null;
+          garageOwnerName = owner.name ?? null;
+        }
+      }
+
       if (isMechanic && garageRole === 'owner' && garageName) {
         garageId = await userRepository.upsertOwnerGarage(id, garageName);
-      } else if (isMechanic && garageRole === 'worker') {
+      } else if (isMechanic && garageRole === 'worker' && !input.ownerId) {
         const owner = await userRepository.findGarageOwnerForWorker({
           _id: id,
           role: UserRole.USER,

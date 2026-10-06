@@ -626,6 +626,21 @@ export const userRepository = {
     );
     return mapOptionalRow(byGarage.rows[0]);
   },
+  findGarageOwners: async (search?: string) => {
+    let query = `
+      SELECT id, name, garage_name AS "garageName", city 
+      FROM users 
+      WHERE user_type = 'mechanic' AND garage_role = 'owner' AND is_active = true AND is_blocked = false AND deleted_at IS NULL
+    `;
+    const params: string[] = [];
+    if (search) {
+      query += ` AND (name ILIKE $1 OR garage_name ILIKE $1)`;
+      params.push(`%${search}%`);
+    }
+    query += ` ORDER BY name ASC`;
+    const result = await pool.query<{ id: string; name: string; garageName: string; city: string }>(query, params);
+    return result.rows;
+  },
 
   findGarageOwnerForWorker: async (
     worker: IUser,

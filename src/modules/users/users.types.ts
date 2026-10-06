@@ -27,6 +27,7 @@ export interface CompleteProfileInput {
   garageRole?: GarageRole;
   garageName?: string;
   garageOwnerName?: string;
+  ownerId?: string;
   avatarUrl?: string;
   aadhaarUrl: string;
   panUrl: string;

@@ -13,6 +13,15 @@ import { completeProfileSchema } from './users.validator';
 const router = Router();
 
 router.get(
+  '/garage-owners',
+  ...userOnly,
+  asyncHandler<AuthRequest>((req, res) =>
+    usersUserController.getGarageOwners(req, res)
+  )
+);
+
+
+router.get(
   '/me',
   ...userOnly,
   asyncHandler<AuthRequest>((req, res) => usersUserController.getMe(req, res))

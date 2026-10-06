@@ -16,6 +16,7 @@ export interface CreatePartnerInput {
   garageRole?: GarageRole | null;
   garageName?: string | null;
   garageOwnerName?: string | null;
+  ownerId?: string | null;
   email: string;
   city?: string;
   state?: string;
@@ -35,6 +36,7 @@ export interface UpdatePartnerInput {
   garageRole?: GarageRole | null;
   garageName?: string | null;
   garageOwnerName?: string | null;
+  ownerId?: string | null;
   email?: string;
   city?: string;
   state?: string;

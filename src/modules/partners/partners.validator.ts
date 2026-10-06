@@ -31,6 +31,7 @@ export const createPartnerSchema = z
     garageRole: z.enum(['owner', 'worker']).optional().nullable(),
     garageName: z.string().trim().min(2).max(255).optional().nullable(),
     garageOwnerName: z.string().trim().min(2).max(100).optional().nullable(),
+    ownerId: z.string().trim().uuid().optional().nullable(),
     email: z.string().trim().email(),
     city: z.string().trim().min(2).max(100).optional(),
     state: z.string().trim().min(2).max(100).optional(),
@@ -53,12 +54,14 @@ export const createPartnerSchema = z
           message: 'Garage name is required for Garage Owner',
         });
       }
-      if (data.garageRole === 'worker' && !data.garageOwnerName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['garageOwnerName'],
-          message: 'Garage owner name is required for Worker',
-        });
+      if (data.garageRole === 'worker' && !data.ownerId?.trim()) {
+        if (!data.garageOwnerName?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['garageOwnerName'],
+            message: 'Garage owner name is required if owner is not selected',
+          });
+        }
       }
     }
   });
@@ -71,6 +74,7 @@ export const updatePartnerSchema = z
     garageRole: z.enum(['owner', 'worker']).optional().nullable(),
     garageName: z.string().trim().min(2).max(255).optional().nullable(),
     garageOwnerName: z.string().trim().min(2).max(100).optional().nullable(),
+    ownerId: z.string().trim().uuid().optional().nullable(),
     email: z.string().trim().email().optional(),
     city: z.string().trim().min(2).max(100).optional().nullable(),
     state: z.string().trim().min(2).max(100).optional().nullable(),

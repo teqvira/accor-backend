@@ -66,6 +66,7 @@ export const completeProfileSchema = z
     garageRole: z.enum(['owner', 'worker']).optional(),
     garageName: z.string().trim().min(2).max(255).optional(),
     garageOwnerName: z.string().trim().min(2).max(100).optional(),
+    ownerId: z.string().trim().uuid().optional(),
     avatarUrl: z.string().trim().url().optional(),
     aadhaarUrl: z.string().trim().url(),
     panUrl: z.string().trim().url(),
@@ -80,18 +81,30 @@ export const completeProfileSchema = z
         message: 'Select Garage Owner or Worker',
       });
     }
-    if (!data.garageName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['garageName'],
-        message: 'Garage name is required',
-      });
-    }
-    if (data.garageRole === 'worker' && !data.garageOwnerName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['garageOwnerName'],
-        message: 'Garage owner name is required for workers',
-      });
+    if (data.garageRole === 'worker') {
+      if (!data.ownerId) {
+        if (!data.garageName) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['garageName'],
+            message: 'Garage name is required if ownerId is not selected',
+          });
+        }
+        if (!data.garageOwnerName) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['garageOwnerName'],
+            message: 'Garage owner name is required if ownerId is not selected',
+          });
+        }
+      }
+    } else if (data.garageRole === 'owner') {
+      if (!data.garageName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['garageName'],
+          message: 'Garage name is required for owners',
+        });
+      }
     }
   });
