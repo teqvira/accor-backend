@@ -95,6 +95,8 @@ BEGIN
       'campaign_expiry',
       'coupon_expiry',
       'admin_broadcast',
-      'account_deletion'
+      'account_deletion',
+      'worker_joined',
+      'worker_left'
     ));
 END $$;
