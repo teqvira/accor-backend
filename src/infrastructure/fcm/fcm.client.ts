@@ -130,6 +130,9 @@ export async function sendFcmToTokens(
       data: toStringData(payload.data),
       android: {
         priority: 'high',
+        notification: {
+          sound: 'default',
+        },
       },
       apns: {
         payload: {
