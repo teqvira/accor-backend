@@ -62,7 +62,8 @@ const envSchema = z.object({
   QR_GENERATION_CHUNK_SIZE: z.coerce.number().min(100).max(10000).default(5000),
   PAYOUT_PROVIDER: z
     .nativeEnum(PayoutProviderName)
-    .default(PayoutProviderName.MOCK),
+    .default(PayoutProviderName.MANUAL),
+
   MIN_WITHDRAWAL_AMOUNT: z.coerce.number().min(1).default(50),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),

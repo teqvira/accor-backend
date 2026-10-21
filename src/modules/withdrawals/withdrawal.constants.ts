@@ -11,7 +11,10 @@ export enum WithdrawalStatus {
 }
 
 export enum PayoutProviderName {
+  MANUAL = 'manual',
   MOCK = 'mock',
   RAZORPAY = 'razorpay',
   CASHFREE = 'cashfree',
+  DECENTRO = 'decentro',
 }
+

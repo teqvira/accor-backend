@@ -28,6 +28,12 @@ export const savePayoutProfileSchema = z.discriminatedUnion('method', [
 
 export const createWithdrawalSchema = z.object({
   amount: z.coerce.number().positive('Amount must be greater than zero'),
+  method: z.nativeEnum(PayoutMethod).optional(),
+  accountHolderName: z.string().min(2).max(100).optional(),
+  upiId: upiIdSchema.optional(),
+  accountNumber: z.string().regex(/^\d{9,18}$/, 'Invalid account number').optional(),
+  ifsc: ifscSchema.optional(),
+  bankName: z.string().max(100).optional(),
 });
 
 export const withdrawalSendOtpSchema = z.object({
@@ -37,4 +43,35 @@ export const withdrawalSendOtpSchema = z.object({
 export const withdrawalVerifyOtpSchema = z.object({
   amount: z.coerce.number().positive('Amount must be greater than zero'),
   otp: z.string().min(4).max(8),
+  method: z.nativeEnum(PayoutMethod).optional(),
+  accountHolderName: z.string().min(2).max(100).optional(),
+  upiId: upiIdSchema.optional(),
+  accountNumber: z.string().regex(/^\d{9,18}$/, 'Invalid account number').optional(),
+  ifsc: ifscSchema.optional(),
+  bankName: z.string().max(100).optional(),
 });
+
+export const adminListWithdrawalsQuerySchema = z.object({
+  status: z
+    .enum(['pending', 'processing', 'success', 'failed', 'all'])
+    .default('pending'),
+  search: z.string().trim().optional(),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const adminCompleteWithdrawalSchema = z.object({
+  utr: z.string().trim().min(1).max(100).optional(),
+  remarks: z.string().trim().max(500).optional(),
+});
+
+export const adminRejectWithdrawalSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Rejection reason must be at least 3 characters')
+    .max(500),
+});
+

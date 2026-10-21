@@ -30,10 +30,12 @@ export class WithdrawalController {
     const withdrawal = await withdrawalService.verifyWithdrawalOtp(
       req.user!.sub,
       req.body.amount,
-      req.body.otp
+      req.body.otp,
+      req.body
     );
     sendSuccess(res, 'Withdrawal initiated successfully', { withdrawal });
   }
+
 
   async withdraw(req: AuthRequest, res: Response): Promise<void> {
     const withdrawal = await withdrawalService.requestWithdrawal(

@@ -17,6 +17,9 @@ import { PayoutMethod, WithdrawalStatus } from './withdrawal.constants';
 import { payoutProfileRepository } from './repositories/payout-profile.repository';
 import { withdrawalRepository } from './repositories/withdrawal.repository';
 import {
+  AdminCompleteWithdrawalInput,
+  AdminRejectWithdrawalInput,
+  AdminWithdrawalFilters,
   CreateWithdrawalInput,
   IPayoutProfile,
   IWithdrawal,
@@ -75,6 +78,8 @@ function sanitizeWithdrawal(withdrawal: IWithdrawal) {
     requestedAt: withdrawal.requestedAt,
     processedAt: withdrawal.processedAt,
     createdAt: withdrawal.createdAt,
+    utrNumber: withdrawal.utrNumber,
+    remarks: withdrawal.failureReason,
   };
 }
 
@@ -151,7 +156,11 @@ export class WithdrawalService {
   }
 
   /** Pre-checks shared by send-otp and withdraw. */
-  private async assertWithdrawalReady(userId: string, amount: number) {
+  private async assertWithdrawalReady(
+    userId: string,
+    amount: number,
+    inlineDetails?: Omit<CreateWithdrawalInput, 'amount'>
+  ) {
     await assertPartnerApproved(userId);
 
     if (amount < env.MIN_WITHDRAWAL_AMOUNT) {
@@ -161,9 +170,44 @@ export class WithdrawalService {
       );
     }
 
-    const profile = await payoutProfileRepository.findByUserId(userId, {
+    let profile = await payoutProfileRepository.findByUserId(userId, {
       includeAccountNumber: true,
     });
+
+    if (inlineDetails?.method) {
+      if (inlineDetails.method === PayoutMethod.UPI && inlineDetails.upiId) {
+        await this.savePayoutProfile(userId, {
+          method: PayoutMethod.UPI,
+          accountHolderName:
+            inlineDetails.accountHolderName ??
+            profile?.accountHolderName ??
+            'Account Holder',
+          upiId: inlineDetails.upiId,
+        });
+        profile = await payoutProfileRepository.findByUserId(userId, {
+          includeAccountNumber: true,
+        });
+      } else if (
+        inlineDetails.method === PayoutMethod.BANK &&
+        inlineDetails.accountNumber &&
+        inlineDetails.ifsc
+      ) {
+        await this.savePayoutProfile(userId, {
+          method: PayoutMethod.BANK,
+          accountHolderName:
+            inlineDetails.accountHolderName ??
+            profile?.accountHolderName ??
+            'Account Holder',
+          accountNumber: inlineDetails.accountNumber,
+          ifsc: inlineDetails.ifsc,
+          bankName: inlineDetails.bankName,
+        });
+        profile = await payoutProfileRepository.findByUserId(userId, {
+          includeAccountNumber: true,
+        });
+      }
+    }
+
     if (!profile) {
       throw new BadRequestError(
         'Please add your bank or UPI details before withdrawing',
@@ -201,6 +245,7 @@ export class WithdrawalService {
 
     return { profile, user };
   }
+
 
   /** Validate withdrawal + send OTP to the partner's registered mobile. */
   async sendWithdrawalOtp(userId: string, amount: number) {
@@ -254,7 +299,12 @@ export class WithdrawalService {
   }
 
   /** Verify OTP, then initiate the wallet payout. */
-  async verifyWithdrawalOtp(userId: string, amount: number, otp: string) {
+  async verifyWithdrawalOtp(
+    userId: string,
+    amount: number,
+    otp: string,
+    extraInput?: Omit<CreateWithdrawalInput, 'amount'>
+  ) {
     const user = await userRepository.findById(userId);
     if (!user?.mobileNumber) {
       throw new BadRequestError(
@@ -296,11 +346,15 @@ export class WithdrawalService {
       await otpVerificationRepository.markVerified(otpRecord._id);
     }
 
-    return this.requestWithdrawal(userId, { amount });
+    return this.requestWithdrawal(userId, { amount, ...extraInput });
   }
 
   async requestWithdrawal(userId: string, input: CreateWithdrawalInput) {
-    const { profile } = await this.assertWithdrawalReady(userId, input.amount);
+    const { profile } = await this.assertWithdrawalReady(
+      userId,
+      input.amount,
+      input
+    );
 
     const referenceId = `wd_${crypto.randomUUID()}`;
 
@@ -372,9 +426,12 @@ export class WithdrawalService {
           status:
             payout.status === 'success'
               ? WithdrawalStatus.SUCCESS
+              : payout.status === 'pending'
+              ? WithdrawalStatus.PENDING
               : WithdrawalStatus.PROCESSING,
         }
       );
+
 
       if (!updatedWithdrawal) {
         throw new NotFoundError(
@@ -522,6 +579,152 @@ export class WithdrawalService {
       await this.refundFailedWithdrawal(withdrawal, reason);
     }
   }
+
+  async adminListWithdrawals(filters: AdminWithdrawalFilters) {
+    const { items, total } = await withdrawalRepository.findAdminList(filters);
+    const limit = filters.limit ?? 20;
+    const page = filters.page ?? 1;
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async adminGetStats() {
+    return withdrawalRepository.getAdminStats();
+  }
+
+  async adminGetById(id: string) {
+    const item = await withdrawalRepository.findAdminById(id);
+    if (!item) {
+      throw new NotFoundError(
+        'Withdrawal not found',
+        `adminGetById: withdrawalId=${id}`
+      );
+    }
+    return item;
+  }
+
+  async adminCompleteWithdrawal(
+    id: string,
+    input: AdminCompleteWithdrawalInput,
+    adminId: string
+  ) {
+    const withdrawal = await withdrawalRepository.findById(id);
+    if (!withdrawal) {
+      throw new NotFoundError(
+        'Withdrawal not found',
+        `adminCompleteWithdrawal: withdrawalId=${id}`
+      );
+    }
+
+    if (
+      withdrawal.status !== WithdrawalStatus.PENDING &&
+      withdrawal.status !== WithdrawalStatus.PROCESSING
+    ) {
+      throw new BadRequestError(
+        `Withdrawal cannot be completed from current status '${withdrawal.status}'`,
+        `adminCompleteWithdrawal: status=${withdrawal.status}`
+      );
+    }
+
+    const updated = await withdrawalRepository.completeWithdrawal(id, {
+      utrNumber: input.utr,
+      adminNotes: input.remarks,
+      reviewedBy: adminId,
+    });
+
+    if (!updated) {
+      throw new BadRequestError(
+        'Failed to complete withdrawal request',
+        `adminCompleteWithdrawal: withdrawalId=${id}`
+      );
+    }
+
+    const user = await userRepository.findById(updated.userId);
+    notificationsService.notifyWalletTransaction({
+      userId: updated.userId,
+      transactionId: updated._id,
+      amount: updated.amount,
+      direction: 'debit',
+      remarks: input.utr
+        ? `Withdrawal completed (UTR: ${input.utr})`
+        : `Withdrawal processed successfully`,
+      userName: user?.name,
+    });
+
+    return updated;
+  }
+
+  async adminRejectWithdrawal(
+    id: string,
+    input: AdminRejectWithdrawalInput,
+    adminId: string
+  ) {
+    const withdrawal = await withdrawalRepository.findById(id);
+    if (!withdrawal) {
+      throw new NotFoundError(
+        'Withdrawal not found',
+        `adminRejectWithdrawal: withdrawalId=${id}`
+      );
+    }
+
+    if (
+      withdrawal.status !== WithdrawalStatus.PENDING &&
+      withdrawal.status !== WithdrawalStatus.PROCESSING
+    ) {
+      throw new BadRequestError(
+        `Withdrawal cannot be rejected from current status '${withdrawal.status}'`,
+        `adminRejectWithdrawal: status=${withdrawal.status}`
+      );
+    }
+
+    const result = await withTransaction(async (client) => {
+      const rejected = await withdrawalRepository.rejectWithdrawal(
+        id,
+        {
+          reason: input.reason,
+          reviewedBy: adminId,
+        },
+        client
+      );
+
+      if (!rejected) {
+        throw new BadRequestError(
+          'Failed to reject withdrawal or status has already changed',
+          `adminRejectWithdrawal: withdrawalId=${id}`
+        );
+      }
+
+      const walletTx = await walletService.creditInSession(
+        rejected.userId,
+        rejected.amount,
+        rejected._id,
+        `Withdrawal refund ${rejected.providerReferenceId}`,
+        client,
+        'withdrawal'
+      );
+
+      return { rejected, walletTx };
+    });
+
+    const user = await userRepository.findById(result.rejected.userId);
+    notificationsService.notifyWalletTransaction({
+      userId: result.rejected.userId,
+      transactionId: result.walletTx._id,
+      amount: result.rejected.amount,
+      direction: 'credit',
+      remarks: `Withdrawal rejected: ${input.reason}. Amount refunded.`,
+      userName: user?.name,
+    });
+
+    return result.rejected;
+  }
 }
 
 export const withdrawalService = new WithdrawalService();
+

@@ -2,6 +2,9 @@ import { PoolClient } from 'pg';
 import pool from '../../../database/connection';
 import { PayoutMethod, WithdrawalStatus } from '../withdrawal.constants';
 import {
+  AdminWithdrawalFilters,
+  AdminWithdrawalItem,
+  AdminWithdrawalStats,
   CreateWithdrawalData,
   IWithdrawal,
 } from '../withdrawal.types';
@@ -21,10 +24,22 @@ interface WithdrawalRow {
   requested_at: Date;
   processed_at: Date | null;
   created_at: Date;
+  reviewed_by?: string | null;
+  utr_number?: string | null;
+  admin_notes?: string | null;
   account_type?: PayoutMethod | null;
   upi_id?: string | null;
   account_number?: string | null;
   ifsc_code?: string | null;
+}
+
+interface AdminWithdrawalRow extends WithdrawalRow {
+  account_holder_name?: string | null;
+  bank_name?: string | null;
+  user_name?: string | null;
+  user_mobile?: string | null;
+  user_role?: string | null;
+  user_wallet_balance?: string | number | null;
 }
 
 function resolvePayoutDestination(row: WithdrawalRow): string {
@@ -57,6 +72,42 @@ export function mapWithdrawalRow(row: WithdrawalRow): IWithdrawal {
     requestedAt: row.requested_at,
     processedAt: row.processed_at ?? undefined,
     createdAt: row.created_at,
+    reviewedBy: row.reviewed_by ?? undefined,
+    utrNumber: row.utr_number ?? undefined,
+    adminNotes: row.admin_notes ?? undefined,
+  };
+}
+
+function mapAdminWithdrawalRow(row: AdminWithdrawalRow): AdminWithdrawalItem {
+  return {
+    id: row.id,
+    amount: Number(row.amount),
+    status: row.status,
+    method: row.account_type ?? PayoutMethod.UPI,
+    provider: (row.provider as AdminWithdrawalItem['provider']) ?? undefined,
+    transactionReference: row.transaction_reference ?? '',
+    providerPayoutId: row.provider_payout_id ?? undefined,
+    requestedAt: row.requested_at,
+    processedAt: row.processed_at ?? undefined,
+    remarks: row.remarks ?? undefined,
+    utrNumber: row.utr_number ?? undefined,
+    adminNotes: row.admin_notes ?? undefined,
+    reviewedBy: row.reviewed_by ?? undefined,
+    user: {
+      id: row.user_id,
+      name: row.user_name ?? undefined,
+      mobileNumber: row.user_mobile ?? undefined,
+      role: row.user_role ?? undefined,
+      walletBalance: Number(row.user_wallet_balance ?? 0),
+    },
+    beneficiary: {
+      method: row.account_type ?? PayoutMethod.UPI,
+      accountHolderName: row.account_holder_name ?? undefined,
+      accountNumber: row.account_number ?? undefined,
+      ifsc: row.ifsc_code ?? undefined,
+      bankName: row.bank_name ?? undefined,
+      upiId: row.upi_id ?? undefined,
+    },
   };
 }
 
@@ -64,6 +115,7 @@ const WITHDRAWAL_COLUMNS = `
   w.id, w.user_id, w.payout_profile_id, w.amount, w.status,
   w.transaction_reference, w.remarks, w.provider, w.provider_payout_id,
   w.requested_at, w.processed_at, w.created_at,
+  w.reviewed_by, w.utr_number, w.admin_notes,
   p.account_type, p.upi_id, p.account_number, p.ifsc_code
 `;
 
@@ -73,6 +125,7 @@ const WITHDRAWAL_FROM = `
 `;
 
 export const withdrawalRepository = {
+
   create: async (
     data: CreateWithdrawalData,
     client?: Queryable
@@ -258,4 +311,212 @@ export const withdrawalRepository = {
     );
     return withdrawalRepository.findById(id, client);
   },
+
+  findAdminList: async (
+    filters: AdminWithdrawalFilters
+  ): Promise<{ items: AdminWithdrawalItem[]; total: number }> => {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(`w.status = $${paramIndex++}`);
+      values.push(filters.status);
+    }
+
+    if (filters.search) {
+      conditions.push(
+        `(u.name ILIKE $${paramIndex} OR u.mobile_number ILIKE $${paramIndex} OR w.transaction_reference ILIKE $${paramIndex} OR w.utr_number ILIKE $${paramIndex})`
+      );
+      values.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+
+    if (filters.startDate) {
+      conditions.push(`w.requested_at >= $${paramIndex++}`);
+      values.push(new Date(filters.startDate));
+    }
+
+    if (filters.endDate) {
+      conditions.push(`w.requested_at <= $${paramIndex++}`);
+      values.push(new Date(filters.endDate));
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const adminColumns = `
+      w.id, w.user_id, w.payout_profile_id, w.amount, w.status,
+      w.transaction_reference, w.remarks, w.provider, w.provider_payout_id,
+      w.requested_at, w.processed_at, w.created_at,
+      w.reviewed_by, w.utr_number, w.admin_notes,
+      p.account_type, p.account_holder_name, p.upi_id, p.account_number, p.ifsc_code, p.bank_name,
+      u.name AS user_name, u.mobile_number AS user_mobile, u.role AS user_role, u.wallet_balance AS user_wallet_balance
+    `;
+
+    const adminFrom = `
+      FROM withdrawals w
+      LEFT JOIN payout_profiles p ON p.id = w.payout_profile_id
+      LEFT JOIN users u ON u.id = w.user_id
+    `;
+
+    const listQuery = `
+      SELECT ${adminColumns}
+      ${adminFrom}
+      ${whereClause}
+      ORDER BY w.requested_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*)::text AS count
+      ${adminFrom}
+      ${whereClause}
+    `;
+
+    const [itemsResult, countResult] = await Promise.all([
+      pool.query<AdminWithdrawalRow>(listQuery, [...values, limit, offset]),
+      pool.query<{ count: string }>(countQuery, values),
+    ]);
+
+    return {
+      items: itemsResult.rows.map(mapAdminWithdrawalRow),
+      total: Number(countResult.rows[0]?.count ?? 0),
+    };
+  },
+
+  findAdminById: async (id: string): Promise<AdminWithdrawalItem | null> => {
+    const adminColumns = `
+      w.id, w.user_id, w.payout_profile_id, w.amount, w.status,
+      w.transaction_reference, w.remarks, w.provider, w.provider_payout_id,
+      w.requested_at, w.processed_at, w.created_at,
+      w.reviewed_by, w.utr_number, w.admin_notes,
+      p.account_type, p.account_holder_name, p.upi_id, p.account_number, p.ifsc_code, p.bank_name,
+      u.name AS user_name, u.mobile_number AS user_mobile, u.role AS user_role, u.wallet_balance AS user_wallet_balance
+    `;
+
+    const adminFrom = `
+      FROM withdrawals w
+      LEFT JOIN payout_profiles p ON p.id = w.payout_profile_id
+      LEFT JOIN users u ON u.id = w.user_id
+    `;
+
+    const result = await pool.query<AdminWithdrawalRow>(
+      `SELECT ${adminColumns} ${adminFrom} WHERE w.id = $1`,
+      [id]
+    );
+
+    return result.rows[0] ? mapAdminWithdrawalRow(result.rows[0]) : null;
+  },
+
+  getAdminStats: async (): Promise<AdminWithdrawalStats> => {
+    const result = await pool.query<{
+      status: string;
+      count: string;
+      total_amount: string;
+    }>(
+      `SELECT
+         w.status,
+         COUNT(*)::text AS count,
+         COALESCE(SUM(w.amount), 0)::text AS total_amount
+       FROM withdrawals w
+       GROUP BY w.status`
+    );
+
+    const stats: AdminWithdrawalStats = {
+      pending: { count: 0, totalAmount: 0 },
+      processing: { count: 0, totalAmount: 0 },
+      success: { count: 0, totalAmount: 0 },
+      failed: { count: 0, totalAmount: 0 },
+    };
+
+    for (const row of result.rows) {
+      const statusKey = row.status as keyof AdminWithdrawalStats;
+      if (stats[statusKey]) {
+        stats[statusKey] = {
+          count: Number(row.count),
+          totalAmount: Number(row.total_amount),
+        };
+      }
+    }
+
+    return stats;
+  },
+
+  completeWithdrawal: async (
+    id: string,
+    data: {
+      utrNumber?: string;
+      adminNotes?: string;
+      reviewedBy: string;
+    },
+    client?: Queryable
+  ): Promise<IWithdrawal | null> => {
+    const db = client ?? pool;
+    const result = await db.query(
+      `UPDATE withdrawals
+       SET status = $2,
+           utr_number = COALESCE($3, utr_number),
+           admin_notes = COALESCE($4, admin_notes),
+           reviewed_by = $5,
+           processed_at = NOW()
+       WHERE id = $1 AND status IN ($6, $7)
+       RETURNING id`,
+      [
+        id,
+        WithdrawalStatus.SUCCESS,
+        data.utrNumber ?? null,
+        data.adminNotes ?? null,
+        data.reviewedBy,
+        WithdrawalStatus.PENDING,
+        WithdrawalStatus.PROCESSING,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+    return withdrawalRepository.findById(id, client);
+  },
+
+  rejectWithdrawal: async (
+    id: string,
+    data: {
+      reason: string;
+      adminNotes?: string;
+      reviewedBy: string;
+    },
+    client?: Queryable
+  ): Promise<IWithdrawal | null> => {
+    const db = client ?? pool;
+    const result = await db.query(
+      `UPDATE withdrawals
+       SET status = $2,
+           remarks = $3,
+           admin_notes = COALESCE($4, admin_notes),
+           reviewed_by = $5,
+           processed_at = NOW()
+       WHERE id = $1 AND status IN ($6, $7)
+       RETURNING id`,
+      [
+        id,
+        WithdrawalStatus.FAILED,
+        data.reason,
+        data.adminNotes ?? null,
+        data.reviewedBy,
+        WithdrawalStatus.PENDING,
+        WithdrawalStatus.PROCESSING,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+    return withdrawalRepository.findById(id, client);
+  },
 };
+

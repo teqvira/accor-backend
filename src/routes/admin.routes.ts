@@ -12,6 +12,7 @@ import { transactionsRoutes } from '../modules/transactions/index';
 import { campaignsRoutes } from '../modules/campaigns/index';
 import { partnersAdminRoutes } from '../modules/partners/index';
 import { notificationsAdminRoutes } from '../modules/notifications/index';
+import { withdrawalsAdminRoutes } from '../modules/withdrawals/index';
 
 export function registerAdminRoutes(app: Express): void {
   app.use('/api/auth', authAdminRoutes);
@@ -19,6 +20,8 @@ export function registerAdminRoutes(app: Express): void {
   app.use('/api/account-deletion', accountDeletionAdminRoutes);
   app.use('/api/partners', partnersAdminRoutes);
   app.use('/api/wallet', walletAdminRoutes);
+  app.use('/api/withdrawals', withdrawalsAdminRoutes);
+  app.use('/api/wallet/withdrawals', withdrawalsAdminRoutes);
   app.use('/api/rewards', rewardsAdminRoutes);
   app.use('/api/upload', uploadAdminRoutes);
   app.use('/api/products', productsRoutes);
@@ -28,4 +31,5 @@ export function registerAdminRoutes(app: Express): void {
   app.use('/api/campaigns', campaignsRoutes);
   app.use('/api/notifications', notificationsAdminRoutes);
 }
+
 

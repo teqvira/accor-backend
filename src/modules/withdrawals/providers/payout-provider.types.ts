@@ -8,4 +8,10 @@ export interface PayoutProvider {
     amount: number,
     referenceId: string
   ): Promise<PayoutResult>;
+  getAccountBalance?(): Promise<{
+    balance: number;
+    currency: string;
+    isConfigured: boolean;
+  }>;
 }
+

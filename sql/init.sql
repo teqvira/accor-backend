@@ -20,8 +20,13 @@
 \i sql/migrations/020_notification_broadcast_fields.sql
 \i sql/migrations/021_otp_purpose_qr_redemption.sql
 \i sql/migrations/022_otp_purpose_withdrawal.sql
+\i sql/migrations/023_admin_wallet_topups.sql
 \i sql/migrations/023_reward_gift_handover.sql
 \i sql/migrations/024_pincode_and_garage.sql
 \i sql/migrations/025_admin_perf_indexes.sql
 \i sql/migrations/026_campaign_bonus_and_pincodes.sql
+\i sql/migrations/027_reward_once_and_notification_history.sql
 \i sql/migrations/027_user_blocked_status.sql
+\i sql/migrations/028_account_deletion.sql
+\i sql/migrations/029_withdrawal_admin_review.sql
+
