@@ -13,7 +13,11 @@ import { userRepository } from '../auth/repositories/user.repository';
 import { notificationsService } from '../notifications/index';
 import { assertPartnerApproved } from '../partners/partners.service';
 import { walletService } from '../wallet/wallet.service';
-import { PayoutMethod, WithdrawalStatus } from './withdrawal.constants';
+import {
+  PayoutMethod,
+  WithdrawalStatus,
+  WITHDRAWAL_COOLDOWN_DAYS,
+} from './withdrawal.constants';
 import { payoutProfileRepository } from './repositories/payout-profile.repository';
 import { withdrawalRepository } from './repositories/withdrawal.repository';
 import {
@@ -155,6 +159,35 @@ export class WithdrawalService {
     };
   }
 
+  assertWithdrawalCooldown(
+    latest: IWithdrawal,
+    userId: string,
+    now: Date = new Date()
+  ): void {
+    const createdAtTime = new Date(latest.createdAt).getTime();
+    if (isNaN(createdAtTime)) {
+      return;
+    }
+
+    const cooldownMs = WITHDRAWAL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+    const elapsedMs = now.getTime() - createdAtTime;
+
+    if (elapsedMs < cooldownMs) {
+      const remainingMs = cooldownMs - elapsedMs;
+      const remainingDays = Math.max(
+        1,
+        Math.ceil(remainingMs / (24 * 60 * 60 * 1000))
+      );
+      const nextAvailableDate = new Date(createdAtTime + cooldownMs);
+      const dateStr = nextAvailableDate.toISOString().slice(0, 10);
+
+      throw new BadRequestError(
+        `You can create a maximum of one withdrawal request within a 7-day period. Please try again in ${remainingDays} ${remainingDays === 1 ? 'day' : 'days'} (available on ${dateStr}).`,
+        `assertWithdrawalCooldown: 7-day restriction active for userId=${userId}. Last request at ${new Date(createdAtTime).toISOString()}, next eligible on ${nextAvailableDate.toISOString()}`
+      );
+    }
+  }
+
   /** Pre-checks shared by send-otp and withdraw. */
   private async assertWithdrawalReady(
     userId: string,
@@ -221,6 +254,11 @@ export class WithdrawalService {
         'You already have a withdrawal in progress',
         `assertWithdrawalReady: pending withdrawal=${pending._id}`
       );
+    }
+
+    const latest = await withdrawalRepository.findLatestByUserId(userId);
+    if (latest) {
+      this.assertWithdrawalCooldown(latest, userId);
     }
 
     const user = await userRepository.findById(userId);
@@ -371,6 +409,14 @@ export class WithdrawalService {
           'Insufficient wallet balance',
           `requestWithdrawal: balance=${user.walletBalance}`
         );
+      }
+
+      const latest = await withdrawalRepository.findLatestByUserId(
+        userId,
+        client
+      );
+      if (latest) {
+        this.assertWithdrawalCooldown(latest, userId);
       }
 
       const createdWithdrawal = await withdrawalRepository.create(

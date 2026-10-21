@@ -209,6 +209,22 @@ export const withdrawalRepository = {
     return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
   },
 
+  findLatestByUserId: async (
+    userId: string,
+    client?: Queryable
+  ): Promise<IWithdrawal | null> => {
+    const db = client ?? pool;
+    const result = await db.query<WithdrawalRow>(
+      `SELECT ${WITHDRAWAL_COLUMNS}
+       ${WITHDRAWAL_FROM}
+       WHERE w.user_id = $1
+       ORDER BY w.created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+    return result.rows[0] ? mapWithdrawalRow(result.rows[0]) : null;
+  },
+
   findByProviderReferenceId: async (
     providerReferenceId: string
   ): Promise<IWithdrawal | null> => {
