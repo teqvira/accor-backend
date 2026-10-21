@@ -8,6 +8,13 @@ import {
   CreateWithdrawalData,
   IWithdrawal,
 } from '../withdrawal.types';
+import {
+  formatMaskedDestination,
+  maskAccountNumber,
+  maskIfsc,
+  maskMobile,
+  maskUpiId,
+} from '../withdrawal.mask';
 
 type Queryable = Pick<PoolClient, 'query'>;
 
@@ -43,17 +50,12 @@ interface AdminWithdrawalRow extends WithdrawalRow {
 }
 
 function resolvePayoutDestination(row: WithdrawalRow): string {
-  if (row.account_type === PayoutMethod.UPI) {
-    return row.upi_id ?? '';
-  }
-  if (row.account_number || row.ifsc_code) {
-    const masked =
-      row.account_number && row.account_number.length > 4
-        ? `****${row.account_number.slice(-4)}`
-        : '****';
-    return `${masked}@${row.ifsc_code ?? ''}`;
-  }
-  return '';
+  return formatMaskedDestination({
+    method: row.account_type ?? undefined,
+    upiId: row.upi_id,
+    accountNumber: row.account_number,
+    ifsc: row.ifsc_code,
+  });
 }
 
 export function mapWithdrawalRow(row: WithdrawalRow): IWithdrawal {
@@ -78,7 +80,12 @@ export function mapWithdrawalRow(row: WithdrawalRow): IWithdrawal {
   };
 }
 
-function mapAdminWithdrawalRow(row: AdminWithdrawalRow): AdminWithdrawalItem {
+export function mapAdminWithdrawalRow(
+  row: AdminWithdrawalRow,
+  options?: { maskSensitive?: boolean }
+): AdminWithdrawalItem {
+  const mask = options?.maskSensitive !== false;
+
   return {
     id: row.id,
     amount: Number(row.amount),
@@ -96,17 +103,21 @@ function mapAdminWithdrawalRow(row: AdminWithdrawalRow): AdminWithdrawalItem {
     user: {
       id: row.user_id,
       name: row.user_name ?? undefined,
-      mobileNumber: row.user_mobile ?? undefined,
+      mobileNumber: mask
+        ? maskMobile(row.user_mobile)
+        : (row.user_mobile ?? undefined),
       role: row.user_role ?? undefined,
       walletBalance: Number(row.user_wallet_balance ?? 0),
     },
     beneficiary: {
       method: row.account_type ?? PayoutMethod.UPI,
       accountHolderName: row.account_holder_name ?? undefined,
-      accountNumber: row.account_number ?? undefined,
-      ifsc: row.ifsc_code ?? undefined,
+      accountNumber: mask
+        ? maskAccountNumber(row.account_number)
+        : (row.account_number ?? undefined),
+      ifsc: mask ? maskIfsc(row.ifsc_code) : (row.ifsc_code ?? undefined),
       bankName: row.bank_name ?? undefined,
-      upiId: row.upi_id ?? undefined,
+      upiId: mask ? maskUpiId(row.upi_id) : (row.upi_id ?? undefined),
     },
   };
 }
@@ -400,7 +411,9 @@ export const withdrawalRepository = {
     ]);
 
     return {
-      items: itemsResult.rows.map(mapAdminWithdrawalRow),
+      items: itemsResult.rows.map((row) =>
+        mapAdminWithdrawalRow(row, { maskSensitive: true })
+      ),
       total: Number(countResult.rows[0]?.count ?? 0),
     };
   },
@@ -426,7 +439,9 @@ export const withdrawalRepository = {
       [id]
     );
 
-    return result.rows[0] ? mapAdminWithdrawalRow(result.rows[0]) : null;
+    return result.rows[0]
+      ? mapAdminWithdrawalRow(result.rows[0], { maskSensitive: false })
+      : null;
   },
 
   getAdminStats: async (): Promise<AdminWithdrawalStats> => {

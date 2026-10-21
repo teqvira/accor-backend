@@ -12,20 +12,15 @@ import {
 } from './activity.types';
 import { activityRepository } from './activity.repository';
 
-function maskBankAccount(accountNumber: string | null | undefined): string {
-  if (!accountNumber) return '****';
-  if (accountNumber.length <= 4) return `****${accountNumber}`;
-  return `****${accountNumber.slice(-4)}`;
-}
+import { formatMaskedDestination } from '../withdrawals/withdrawal.mask';
 
 function resolvePayoutDestination(row: ActivityFeedRow): string {
-  if (row.account_type === 'upi') {
-    return row.upi_id ?? '';
-  }
-  if (row.account_number || row.ifsc_code) {
-    return `${maskBankAccount(row.account_number)}@${row.ifsc_code ?? ''}`;
-  }
-  return '';
+  return formatMaskedDestination({
+    method: row.account_type,
+    upiId: row.upi_id,
+    accountNumber: row.account_number,
+    ifsc: row.ifsc_code,
+  });
 }
 
 function mapWithdrawalStatus(

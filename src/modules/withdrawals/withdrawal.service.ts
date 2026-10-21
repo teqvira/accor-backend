@@ -18,6 +18,13 @@ import {
   WithdrawalStatus,
   WITHDRAWAL_COOLDOWN_DAYS,
 } from './withdrawal.constants';
+import {
+  formatMaskedDestination,
+  maskAccountNumber,
+  maskIfsc,
+  maskMobile,
+  maskUpiId,
+} from './withdrawal.mask';
 import { payoutProfileRepository } from './repositories/payout-profile.repository';
 import { withdrawalRepository } from './repositories/withdrawal.repository';
 import {
@@ -43,34 +50,22 @@ function resolveWithdrawalOtp(): string {
   return generateOtp();
 }
 
-function maskMobile(mobileNumber: string): string {
-  const digits = mobileNumber.replace(/\D/g, '');
-  if (digits.length < 4) return '****';
-  return `+91 ******${digits.slice(-4)}`;
-}
-
-function maskAccountNumber(accountNumber?: string): string | undefined {
-  if (!accountNumber) return undefined;
-  if (accountNumber.length <= 4) return '****';
-  return `****${accountNumber.slice(-4)}`;
-}
-
-function sanitizeProfile(profile: IPayoutProfile) {
+export function sanitizeProfile(profile: IPayoutProfile) {
   return {
     id: profile._id,
     method: profile.method,
     accountHolderName: profile.accountHolderName,
-    upiId: profile.upiId,
+    upiId: maskUpiId(profile.upiId),
     bankName: profile.bankName,
     accountNumberMasked: maskAccountNumber(profile.accountNumber),
-    ifsc: profile.ifsc,
+    ifsc: maskIfsc(profile.ifsc),
     isDefault: profile.isDefault,
     provider: profile.provider,
     updatedAt: profile.updatedAt,
   };
 }
 
-function sanitizeWithdrawal(withdrawal: IWithdrawal) {
+export function sanitizeWithdrawal(withdrawal: IWithdrawal) {
   return {
     id: withdrawal._id,
     amount: withdrawal.amount,
@@ -88,10 +83,12 @@ function sanitizeWithdrawal(withdrawal: IWithdrawal) {
 }
 
 function getPayoutDestination(profile: IPayoutProfile): string {
-  if (profile.method === PayoutMethod.UPI) {
-    return profile.upiId ?? '';
-  }
-  return `${maskAccountNumber(profile.accountNumber)}@${profile.ifsc}`;
+  return formatMaskedDestination({
+    method: profile.method,
+    upiId: profile.upiId,
+    accountNumber: profile.accountNumber,
+    ifsc: profile.ifsc,
+  });
 }
 
 export class WithdrawalService {
@@ -323,7 +320,7 @@ export class WithdrawalService {
 
     if (env.TEST_STATIC_OTP) {
       console.log(
-        `[TEST OTP] withdrawal static OTP for ${mobileNumber} amount=${amount}: ${otp} (SMS skipped)`
+        `[TEST OTP] withdrawal static OTP for ${maskMobile(mobileNumber)} amount=${amount}: ${otp} (SMS skipped)`
       );
     } else {
       await sendOtpSms(mobileNumber, otp);
