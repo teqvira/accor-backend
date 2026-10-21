@@ -160,6 +160,22 @@ export const notificationRepository = {
     }
   },
 
+  existsByReference: async (
+    referenceType: string,
+    referenceId: string,
+    client?: { query: typeof pool.query }
+  ): Promise<boolean> => {
+    const db = client ?? pool;
+    const result = await db.query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM notifications
+         WHERE reference_type = $1 AND reference_id = $2
+       ) AS exists`,
+      [referenceType, referenceId]
+    );
+    return Boolean(result.rows[0]?.exists);
+  },
+
   listAdminBroadcasts: async (filters: {
     page: number;
     limit: number;

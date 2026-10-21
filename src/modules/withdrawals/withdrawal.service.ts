@@ -711,12 +711,32 @@ export class WithdrawalService {
     input: AdminRejectWithdrawalInput,
     adminId: string
   ) {
+    const reason = input?.reason?.trim();
+    if (!reason || reason.length < 3) {
+      throw new BadRequestError(
+        'Rejection reason is required and must be at least 3 characters',
+        `adminRejectWithdrawal: invalid reason withdrawalId=${id}`
+      );
+    }
+
     const withdrawal = await withdrawalRepository.findById(id);
     if (!withdrawal) {
       throw new NotFoundError(
         'Withdrawal not found',
         `adminRejectWithdrawal: withdrawalId=${id}`
       );
+    }
+
+    if (withdrawal.status === WithdrawalStatus.FAILED) {
+      // If retry happens for an already-failed withdrawal, ensure notification is created at most once
+      await notificationsService.notifyWithdrawalRejected({
+        userId: withdrawal.userId,
+        withdrawalId: withdrawal._id,
+        amount: withdrawal.amount,
+        reason: withdrawal.failureReason || reason,
+      });
+
+      return withdrawal;
     }
 
     if (
@@ -733,7 +753,8 @@ export class WithdrawalService {
       const rejected = await withdrawalRepository.rejectWithdrawal(
         id,
         {
-          reason: input.reason,
+          reason,
+          adminNotes: reason,
           reviewedBy: adminId,
         },
         client
@@ -764,8 +785,15 @@ export class WithdrawalService {
       transactionId: result.walletTx._id,
       amount: result.rejected.amount,
       direction: 'credit',
-      remarks: `Withdrawal rejected: ${input.reason}. Amount refunded.`,
+      remarks: `Withdrawal rejected: ${reason}. Amount refunded.`,
       userName: user?.name,
+    });
+
+    await notificationsService.notifyWithdrawalRejected({
+      userId: result.rejected.userId,
+      withdrawalId: result.rejected._id,
+      amount: result.rejected.amount,
+      reason,
     });
 
     return result.rejected;

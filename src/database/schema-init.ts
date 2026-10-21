@@ -173,3 +173,25 @@ export async function initAccountDeletionSchema(): Promise<void> {
     console.error('Failed to initialize account deletion schema:', err);
   }
 }
+
+export async function initWithdrawalRejectionNotificationSchema(): Promise<void> {
+  try {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.notifications') IS NULL THEN
+          RETURN;
+        END IF;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_withdrawal_rejection
+          ON notifications (reference_type, reference_id)
+          WHERE reference_type = 'withdrawal_rejection'
+            AND reference_id IS NOT NULL;
+      END $$;
+    `);
+
+    console.log('Withdrawal rejection notification schema checked/updated');
+  } catch (err) {
+    console.error('Failed to initialize withdrawal rejection notification schema:', err);
+  }
+}

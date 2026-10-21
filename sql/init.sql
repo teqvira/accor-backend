@@ -29,4 +29,5 @@
 \i sql/migrations/027_user_blocked_status.sql
 \i sql/migrations/028_account_deletion.sql
 \i sql/migrations/029_withdrawal_admin_review.sql
+\i sql/migrations/030_withdrawal_rejection_notification_unique.sql
 

@@ -385,6 +385,40 @@ export class NotificationsService {
     );
   }
 
+  async notifyWithdrawalRejected(input: {
+    userId: string;
+    withdrawalId: string;
+    amount: number;
+    reason: string;
+  }): Promise<INotification | null> {
+    const alreadyExists = await notificationRepository.existsByReference(
+      'withdrawal_rejection',
+      input.withdrawalId
+    );
+    if (alreadyExists) {
+      return null;
+    }
+
+    return this.createAndPush({
+      title: 'Withdrawal rejected',
+      body: `Your withdrawal request for ₹${input.amount.toFixed(2)} was rejected. Reason: ${input.reason}`,
+      type: 'wallet_transaction',
+      audience: 'user',
+      recipientUserIds: [input.userId],
+      referenceType: 'withdrawal_rejection',
+      referenceId: input.withdrawalId,
+      data: {
+        screen: 'requests',
+        tab: 1,
+        action: 'withdrawal_rejected',
+        withdrawalId: input.withdrawalId,
+        userId: input.userId,
+        amount: input.amount,
+        reason: input.reason,
+      },
+    });
+  }
+
   notifyCampaignExpiry(input: {
     campaignId: string;
     name: string;
