@@ -4,6 +4,7 @@ import pool from './database/connection';
 import {
   initAccountDeletionSchema,
   initCampaignSchema,
+  initWithdrawalAdminReviewSchema,
   initWithdrawalRejectionNotificationSchema,
 } from './database/schema-init';
 import { startAccountDeletionJob } from './modules/account-deletion/index';
@@ -16,6 +17,7 @@ const startServer = async () => {
     console.log('Database connected: accor_db');
     await initCampaignSchema();
     await initAccountDeletionSchema();
+    await initWithdrawalAdminReviewSchema();
     await initWithdrawalRejectionNotificationSchema();
     await bootstrapAdmin();
     startExpiryNotificationJob();

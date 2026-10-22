@@ -174,6 +174,24 @@ export async function initAccountDeletionSchema(): Promise<void> {
   }
 }
 
+export async function initWithdrawalAdminReviewSchema(): Promise<void> {
+  try {
+    await pool.query(`
+      ALTER TABLE withdrawals 
+        ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users (id),
+        ADD COLUMN IF NOT EXISTS utr_number VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_withdrawals_reviewed_by ON withdrawals (reviewed_by);
+      CREATE INDEX IF NOT EXISTS idx_withdrawals_utr_number ON withdrawals (utr_number);
+    `);
+
+    console.log('Withdrawal admin review schema checked/updated');
+  } catch (err) {
+    console.error('Failed to initialize withdrawal admin review schema:', err);
+  }
+}
+
 export async function initWithdrawalRejectionNotificationSchema(): Promise<void> {
   try {
     await pool.query(`
@@ -195,3 +213,4 @@ export async function initWithdrawalRejectionNotificationSchema(): Promise<void>
     console.error('Failed to initialize withdrawal rejection notification schema:', err);
   }
 }
+
