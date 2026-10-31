@@ -5,7 +5,7 @@ import {
   QrLabelColor,
   QrLabelShape,
 } from '../constants/qr-label.constants';
-import { IQrBatch, QrBatchStatus } from '../qr.types';
+import { IQrBatch, QrBatchListFilters, QrBatchStatus } from '../qr.types';
 
 interface QrBatchRow {
   id: string;
@@ -117,6 +117,43 @@ export interface UpdateQrBatchData {
   labelColor?: QrLabelColor;
 }
 
+export function buildBatchWhereClause(filters: QrBatchListFilters = {}): {
+  clause: string;
+  values: unknown[];
+} {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filters.search?.trim()) {
+    const searchPattern = `%${filters.search.trim()}%`;
+    conditions.push(
+      `(b.coupon_name ILIKE $${paramIndex} OR ` +
+        `b.name ILIKE $${paramIndex} OR ` +
+        `b.id::text ILIKE $${paramIndex} OR ` +
+        `p.sku_code ILIKE $${paramIndex} OR ` +
+        `p.name ILIKE $${paramIndex})`
+    );
+    values.push(searchPattern);
+    paramIndex++;
+  }
+
+  if (filters.status) {
+    const normalized = filters.status.trim().toLowerCase();
+    if (normalized === 'active') {
+      conditions.push('b.active = true');
+    } else if (normalized === 'inactive') {
+      conditions.push('b.active = false');
+    } else if (normalized === 'draft' || normalized === 'generated') {
+      conditions.push(`b.status = $${paramIndex++}`);
+      values.push(normalized);
+    }
+  }
+
+  const clause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return { clause, values };
+}
+
 export const qrBatchRepository = {
   create: async (data: CreateQrBatchData): Promise<IQrBatch> => {
     const result = await pool.query<QrBatchRow>(
@@ -179,9 +216,12 @@ export const qrBatchRepository = {
 
   findAll: async (
     page = 1,
-    limit = 20
+    limit = 20,
+    filters: QrBatchListFilters = {}
   ): Promise<{ items: IQrBatch[]; total: number }> => {
     const offset = (page - 1) * limit;
+    const { clause, values } = buildBatchWhereClause(filters);
+
     const [itemsResult, countResult] = await Promise.all([
       pool.query<QrBatchRow>(
         `SELECT ${BATCH_COLUMNS},
@@ -194,13 +234,18 @@ export const qrBatchRepository = {
          FROM qr_batches b
          LEFT JOIN products p ON p.id = b.product_id
          LEFT JOIN qr_codes qc ON qc.batch_id = b.id
+         ${clause}
          GROUP BY b.id, p.sku_code, p.name, p.image_url, p.color
          ORDER BY b.created_at DESC
-         LIMIT $1 OFFSET $2`,
-        [limit, offset]
+         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, limit, offset]
       ),
       pool.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM qr_batches`
+        `SELECT COUNT(*)::text AS count
+         FROM qr_batches b
+         LEFT JOIN products p ON p.id = b.product_id
+         ${clause}`,
+        values
       ),
     ]);
     return {
@@ -297,34 +342,47 @@ export const qrBatchRepository = {
     return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
   },
 
-  findOptionsByProductId: async (productId?: string): Promise<IQrBatch[]> => {
+  findOptionsByProductId: async (
+    productId?: string,
+    search?: string
+  ): Promise<IQrBatch[]> => {
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
     if (productId) {
-      const result = await pool.query<QrBatchRow>(
-        `SELECT ${BATCH_COLUMNS},
-                p.sku_code AS product_sku_code,
-                p.name AS product_name,
-                p.image_url AS product_image_url,
-                p.color AS product_color
-         FROM qr_batches b
-         LEFT JOIN products p ON p.id = b.product_id
-         WHERE b.product_id = $1
-         ORDER BY b.created_at DESC`,
-        [productId]
-      );
-      return result.rows.map(mapQrBatchRow);
-    } else {
-      const result = await pool.query<QrBatchRow>(
-        `SELECT ${BATCH_COLUMNS},
-                p.sku_code AS product_sku_code,
-                p.name AS product_name,
-                p.image_url AS product_image_url,
-                p.color AS product_color
-         FROM qr_batches b
-         LEFT JOIN products p ON p.id = b.product_id
-         ORDER BY b.created_at DESC`
-      );
-      return result.rows.map(mapQrBatchRow);
+      conditions.push(`b.product_id = $${paramIndex++}`);
+      values.push(productId);
     }
+
+    if (search?.trim()) {
+      const searchPattern = `%${search.trim()}%`;
+      conditions.push(
+        `(b.coupon_name ILIKE $${paramIndex} OR ` +
+          `b.name ILIKE $${paramIndex} OR ` +
+          `p.sku_code ILIKE $${paramIndex} OR ` +
+          `p.name ILIKE $${paramIndex})`
+      );
+      values.push(searchPattern);
+      paramIndex++;
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await pool.query<QrBatchRow>(
+      `SELECT ${BATCH_COLUMNS},
+              p.sku_code AS product_sku_code,
+              p.name AS product_name,
+              p.image_url AS product_image_url,
+              p.color AS product_color
+       FROM qr_batches b
+       LEFT JOIN products p ON p.id = b.product_id
+       ${whereClause}
+       ORDER BY b.created_at DESC`,
+      values
+    );
+    return result.rows.map(mapQrBatchRow);
   },
 };
 

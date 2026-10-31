@@ -22,7 +22,12 @@ export class QrController {
   async listBatches(req: AuthRequest, res: Response): Promise<void> {
     const page = getQueryNumber(req.query.page, 1);
     const limit = getQueryNumber(req.query.limit, 20);
-    const result = await qrBatchService.listBatches(page, limit);
+    const search = getOptionalQueryParam(req.query.search);
+    const status = getOptionalQueryParam(req.query.status);
+    const result = await qrBatchService.listBatches(page, limit, {
+      search,
+      status,
+    });
     sendSuccess(res, 'QR batches fetched successfully', result);
   }
 
@@ -90,11 +95,11 @@ export class QrController {
       getOptionalQueryParam(req.params.productId) ||
       getOptionalQueryParam(req.params.id) ||
       getOptionalQueryParam(req.query.productId);
+    const search = getOptionalQueryParam(req.query.search);
 
-    const result = await qrBatchService.getBatchesOptions(productId);
+    const result = await qrBatchService.getBatchesOptions(productId, search);
     sendSuccess(res, 'QR batches options fetched successfully', result);
   }
 }
-
 
 export const qrController = new QrController();

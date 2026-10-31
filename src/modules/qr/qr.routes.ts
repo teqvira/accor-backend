@@ -4,7 +4,7 @@ import { validate } from '../../shared/middleware/validate';
 import { AuthRequest } from '../auth/auth.types';
 import { adminOnly } from '../auth/guards';
 import { qrController } from './qr.controller';
-import { createBatchSchema, updateBatchSchema } from './qr.validator';
+import { createBatchSchema, listBatchesQuerySchema, updateBatchSchema } from './qr.validator';
 
 const router = Router();
 
@@ -18,6 +18,7 @@ router.post(
 router.get(
   '/batches',
   ...adminOnly,
+  validate(listBatchesQuerySchema, 'query'),
   asyncHandler<AuthRequest>((req, res) => qrController.listBatches(req, res))
 );
 

@@ -17,6 +17,7 @@ import {
   QrBatchOptionItem,
   QrBatchStatus,
   QrCodeListFilters,
+  QrBatchListFilters,
 } from '../qr.types';
 import { generateCodesForBatch } from './qr-generation.service';
 import { generateNextBatchLabel } from '../utils/generate-batch-name';
@@ -132,8 +133,12 @@ export class QrBatchService {
     return toBatchListItem(batchWithProduct ?? batch);
   }
 
-  async listBatches(page = 1, limit = 20) {
-    const { items, total } = await qrBatchRepository.findAll(page, limit);
+  async listBatches(
+    page = 1,
+    limit = 20,
+    filters: QrBatchListFilters = {}
+  ) {
+    const { items, total } = await qrBatchRepository.findAll(page, limit, filters);
     return {
       items: items.map(toBatchListItem),
       total,
@@ -332,8 +337,8 @@ export class QrBatchService {
     };
   }
 
-  async getBatchesOptions(productId?: string): Promise<QrBatchOptionItem[]> {
-    const batches = await qrBatchRepository.findOptionsByProductId(productId);
+  async getBatchesOptions(productId?: string, search?: string): Promise<QrBatchOptionItem[]> {
+    const batches = await qrBatchRepository.findOptionsByProductId(productId, search);
     return batches.map((batch) => ({
       id: batch._id,
       value: batch._id,

@@ -82,6 +82,11 @@ export interface UpdateBatchInput {
   color?: QrLabelColor;
 }
 
+export interface QrBatchListFilters {
+  search?: string;
+  status?: string;
+}
+
 export interface QrCodeListFilters {
   batchId?: string;
   redeemed?: boolean;

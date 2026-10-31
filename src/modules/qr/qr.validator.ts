@@ -8,7 +8,10 @@ import {
 
 function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess(
-    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    (val) =>
+      val === null || val === undefined || (typeof val === 'string' && val.trim() === '')
+        ? undefined
+        : val,
     schema
   );
 }
@@ -99,6 +102,15 @@ export const updateBatchSchema = z
     message: 'End date must be on or after start date',
     path: ['endDate'],
   });
+
+export const listBatchesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: emptyToUndefined(z.string().trim().min(1).max(200).optional()),
+  status: emptyToUndefined(
+    z.enum(['active', 'inactive', 'draft', 'generated', 'all']).optional()
+  ),
+});
 
 export const listCodesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
