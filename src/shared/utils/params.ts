@@ -5,11 +5,16 @@ export function getParam(value: string | string[] | undefined): string {
 
 export function getOptionalQueryParam(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  if (Array.isArray(value) && typeof value[0] === 'number') return String(value[0]);
   return undefined;
 }
 
 export function getQueryNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
   const raw = getOptionalQueryParam(value);
   if (!raw) return fallback;
   const parsed = Number(raw);
