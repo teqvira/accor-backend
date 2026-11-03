@@ -5,7 +5,9 @@ import { activityService } from '../activity/activity.service';
 import { userRepository } from '../auth/repositories/user.repository';
 import { walletTransactionRepository } from './wallet-transaction.repository';
 import { env } from '../../config/env';
+import { bulkpePayoutService } from '../withdrawals/providers/bulkpe-payout.provider';
 import { razorpayPayoutService } from '../withdrawals/providers/razorpay-payout.provider';
+import { PayoutProviderName } from '../withdrawals/withdrawal.constants';
 import {
   AdminWalletScanQuery,
   IWalletTransaction,
@@ -154,34 +156,45 @@ export class WalletService {
   }
 
   async getAdminKpis() {
+    const activeProvider = env.PAYOUT_PROVIDER;
+    const balancePromise =
+      activeProvider === PayoutProviderName.BULKPE
+        ? bulkpePayoutService.getAccountBalance()
+        : razorpayPayoutService.getAccountBalance();
+
     const [
-      razorpayInfo,
+      providerBalanceInfo,
       razorpayUnsettled,
       dbPendingTopups,
       totalWithdrawn,
       totalUserWalletBalance,
       totalScansCount,
     ] = await Promise.all([
-      razorpayPayoutService.getAccountBalance(),
-      razorpayPayoutService.getUnsettledBalance(),
+      balancePromise,
+      activeProvider === PayoutProviderName.RAZORPAY
+        ? razorpayPayoutService.getUnsettledBalance()
+        : Promise.resolve(0),
       walletTransactionRepository.sumPendingAdminTopups(),
       walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
       walletTransactionRepository.sumAllUserWalletBalances(),
       walletTransactionRepository.countTotalScans(),
     ]);
 
-    // Use Razorpay live unsettled balance if available, otherwise DB recorded pending topups
+    // Use live unsettled balance if available, otherwise DB recorded pending topups
     const unsettledBalance =
       razorpayUnsettled > 0 ? razorpayUnsettled : dbPendingTopups;
 
     return {
-      razorpayBalance: razorpayInfo.balance,
+      razorpayBalance: providerBalanceInfo.balance,
+      payoutProvider: activeProvider,
+      payoutAccountBalance: providerBalanceInfo.balance,
       unsettledBalance,
       totalWithdrawn,
       totalUserWalletBalance,
       totalScansCount,
-      isRazorpayConfigured: razorpayInfo.isConfigured,
-      currency: razorpayInfo.currency,
+      isRazorpayConfigured: providerBalanceInfo.isConfigured,
+      isPayoutConfigured: providerBalanceInfo.isConfigured,
+      currency: providerBalanceInfo.currency,
     };
   }
 

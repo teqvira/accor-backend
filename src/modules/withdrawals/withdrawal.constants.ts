@@ -16,6 +16,7 @@ export enum PayoutProviderName {
   RAZORPAY = 'razorpay',
   CASHFREE = 'cashfree',
   DECENTRO = 'decentro',
+  BULKPE = 'bulkpe',
 }
 
 export const WITHDRAWAL_COOLDOWN_DAYS = 7;

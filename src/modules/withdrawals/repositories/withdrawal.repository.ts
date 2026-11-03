@@ -271,18 +271,21 @@ export const withdrawalRepository = {
   updateStatus: async (
     id: string,
     status: WithdrawalStatus,
-    client?: Queryable
+    client?: Queryable,
+    utrNumber?: string
   ): Promise<IWithdrawal | null> => {
     const db = client ?? pool;
     await db.query(
       `UPDATE withdrawals
        SET status = $2,
-           processed_at = CASE WHEN $3 THEN NOW() ELSE processed_at END
+           processed_at = CASE WHEN $3 THEN NOW() ELSE processed_at END,
+           utr_number = COALESCE($4, utr_number)
        WHERE id = $1`,
       [
         id,
         status,
         status === WithdrawalStatus.SUCCESS || status === WithdrawalStatus.FAILED,
+        utrNumber ?? null,
       ]
     );
     return withdrawalRepository.findById(id, client);

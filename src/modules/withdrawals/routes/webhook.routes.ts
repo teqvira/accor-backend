@@ -18,4 +18,11 @@ router.post(
   )
 );
 
+router.post(
+  '/bulkpe/payout',
+  asyncHandler<Request>((req, res) =>
+    webhookController.bulkpePayout(req, res)
+  )
+);
+
 export default router;

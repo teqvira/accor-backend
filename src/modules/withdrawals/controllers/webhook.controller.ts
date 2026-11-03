@@ -18,6 +18,14 @@ export class WebhookController {
     );
     sendSuccess(res, 'Webhook processed');
   }
+
+  async bulkpePayout(req: Request, res: Response): Promise<void> {
+    await withdrawalService.handleBulkpeWebhook(
+      req.body as Record<string, unknown>,
+      req.headers as Record<string, unknown>
+    );
+    sendSuccess(res, 'Webhook processed');
+  }
 }
 
 export const webhookController = new WebhookController();

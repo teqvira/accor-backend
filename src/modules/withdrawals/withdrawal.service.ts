@@ -623,6 +623,91 @@ export class WithdrawalService {
     }
   }
 
+  async handleBulkpeWebhook(
+    payload: Record<string, unknown>,
+    headers?: Record<string, unknown>
+  ) {
+    if (env.BULKPE_WEBHOOK_SECRET) {
+      const headerSignature =
+        (headers?.['x-bulkpe-signature'] as string | undefined) ??
+        (headers?.['x-webhook-secret'] as string | undefined) ??
+        (headers?.['authorization'] as string | undefined);
+
+      if (headerSignature) {
+        const secret = env.BULKPE_WEBHOOK_SECRET;
+        const matchesHmac =
+          crypto
+            .createHmac('sha256', secret)
+            .update(JSON.stringify(payload))
+            .digest('hex') === headerSignature;
+        const matchesDirect =
+          headerSignature === secret || headerSignature === `Bearer ${secret}`;
+
+        if (!matchesHmac && !matchesDirect) {
+          throw new BadRequestError('Invalid webhook signature', 'bulkpe webhook');
+        }
+      }
+    }
+
+    const data =
+      payload.data && typeof payload.data === 'object'
+        ? (payload.data as Record<string, unknown>)
+        : payload;
+
+    const referenceId =
+      (typeof data.reference_id === 'string' ? data.reference_id : undefined) ??
+      (typeof payload.reference_id === 'string' ? payload.reference_id : undefined);
+
+    const transactionId =
+      (typeof data.transaction_id === 'string' ? data.transaction_id : undefined) ??
+      (typeof payload.transaction_id === 'string' ? payload.transaction_id : undefined);
+
+    const lookupId = referenceId || transactionId;
+    if (!lookupId) return;
+
+    const withdrawal =
+      await withdrawalRepository.findByProviderReferenceOrPayoutId(lookupId);
+    if (!withdrawal) return;
+
+    const rawStatus = (
+      typeof data.status === 'string'
+        ? data.status
+        : typeof payload.status === 'string'
+        ? payload.status
+        : ''
+    ).toUpperCase();
+
+    const utr =
+      typeof data.utr === 'string'
+        ? data.utr
+        : typeof payload.utr === 'string'
+        ? payload.utr
+        : undefined;
+
+    if (rawStatus === 'SUCCESS') {
+      await withdrawalRepository.updateStatus(
+        withdrawal._id,
+        WithdrawalStatus.SUCCESS,
+        undefined,
+        utr
+      );
+      return;
+    }
+
+    if (rawStatus === 'FAILED' || rawStatus === 'REVERSED') {
+      const reason =
+        (typeof data.statusDescription === 'string'
+          ? data.statusDescription
+          : typeof data.message === 'string'
+          ? data.message
+          : typeof payload.message === 'string'
+          ? payload.message
+          : undefined) ?? 'Bulkpe payout failed';
+
+      await this.refundFailedWithdrawal(withdrawal, reason);
+    }
+  }
+
   async adminListWithdrawals(filters: AdminWithdrawalFilters) {
     const { items, total } = await withdrawalRepository.findAdminList(filters);
     const limit = filters.limit ?? 20;

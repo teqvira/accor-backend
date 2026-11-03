@@ -1,6 +1,7 @@
 import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
 import { PayoutProviderName } from '../withdrawal.constants';
+import { bulkpePayoutService } from './bulkpe-payout.provider';
 import { cashfreePayoutService } from './cashfree-payout.provider';
 import { decentroPayoutService } from './decentro-payout.provider';
 import { manualPayoutService } from './manual-payout.provider';
@@ -26,6 +27,8 @@ export function getPayoutProvider(
       return cashfreePayoutService;
     case PayoutProviderName.DECENTRO:
       return decentroPayoutService;
+    case PayoutProviderName.BULKPE:
+      return bulkpePayoutService;
     default:
       throw new BadRequestError(
         'Payout provider is not supported',

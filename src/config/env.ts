@@ -72,6 +72,9 @@ const envSchema = z.object({
   CASHFREE_CLIENT_ID: z.string().optional(),
   CASHFREE_CLIENT_SECRET: z.string().optional(),
   CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  BULKPE_API_TOKEN: z.string().optional(),
+  BULKPE_BASE_URL: z.string().url().default('https://api.bulkpe.in'),
+  BULKPE_WEBHOOK_SECRET: z.string().optional(),
 
   /**
    * Firebase Admin service account — paste the full JSON as a single-line string,

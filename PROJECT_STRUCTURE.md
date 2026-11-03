@@ -96,7 +96,7 @@ infrastructure/
 
 Put **SDK wiring** here. Keep **business decisions** in feature services.
 
-### Payout providers (Razorpay / Cashfree / mock)
+### Payout providers (Razorpay / Cashfree / Bulkpe / mock)
 
 These live in `modules/withdrawals/providers/`, not `infrastructure/`.
 
