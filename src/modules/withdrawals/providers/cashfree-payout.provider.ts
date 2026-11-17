@@ -2,22 +2,8 @@ import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
 import { PayoutMethod } from '../withdrawal.constants';
 import { payoutProfileRepository } from '../repositories/payout-profile.repository';
-import { IPayoutProfile } from '../withdrawal.types';
-import { PayoutResult } from '../withdrawal.types';
+import { IPayoutProfile, PayoutResult } from '../withdrawal.types';
 import { PayoutProvider } from './payout-provider.types';
-
-interface CashfreeAuthResponse {
-  data?: { token?: string };
-  message?: string;
-}
-
-interface CashfreeTransferResponse {
-  data?: {
-    transfer_id?: string;
-    status?: string;
-  };
-  message?: string;
-}
 
 function getCashfreeBaseUrl(): string {
   return env.CASHFREE_ENV === 'production'
@@ -25,75 +11,73 @@ function getCashfreeBaseUrl(): string {
     : 'https://sandbox.cashfree.com/payout';
 }
 
-async function getCashfreeToken(): Promise<string> {
+function getCashfreeHeaders(): Record<string, string> {
   if (!env.CASHFREE_CLIENT_ID || !env.CASHFREE_CLIENT_SECRET) {
     throw new BadRequestError(
       'Cashfree is not configured',
       'Missing CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET'
     );
   }
-
-  const response = await fetch(`${getCashfreeBaseUrl()}/v1/authorize`, {
-    method: 'POST',
-    headers: {
-      'X-Client-Id': env.CASHFREE_CLIENT_ID,
-      'X-Client-Secret': env.CASHFREE_CLIENT_SECRET,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  const data = (await response.json()) as CashfreeAuthResponse;
-  const token = data.data?.token;
-  if (!response.ok || !token) {
-    throw new BadRequestError(
-      data.message ?? 'Cashfree authorization failed',
-      `Cashfree authorize failed: ${JSON.stringify(data)}`
-    );
-  }
-  return token;
+  return {
+    'x-client-id': env.CASHFREE_CLIENT_ID.trim(),
+    'x-client-secret': env.CASHFREE_CLIENT_SECRET.trim(),
+    'x-api-version': '2024-01-01',
+    'Content-Type': 'application/json',
+  };
 }
 
 export class CashfreePayoutService implements PayoutProvider {
+  /**
+   * Register or verify the beneficiary on Cashfree (Payouts V2 API).
+   */
   async ensureFundAccount(profile: IPayoutProfile): Promise<IPayoutProfile> {
     if (profile.cashfreeBeneficiaryId) {
       return profile;
     }
 
-    const token = await getCashfreeToken();
-    const beneficiaryId = `bene_${profile.userId}`;
+    const beneficiaryId = `bene_${profile.userId.replace(/-/g, '').slice(0, 20)}`;
 
-    const body =
-      profile.method === PayoutMethod.UPI
-        ? {
-            beneId: beneficiaryId,
-            name: profile.accountHolderName,
-            email: `${profile.userId}@payout.local`,
-            phone: '9999999999',
-            vpa: profile.upiId,
-          }
-        : {
-            beneId: beneficiaryId,
-            name: profile.accountHolderName,
-            email: `${profile.userId}@payout.local`,
-            phone: '9999999999',
-            bankAccount: profile.accountNumber,
-            ifsc: profile.ifsc,
-          };
-
-    const response = await fetch(`${getCashfreeBaseUrl()}/v1/addBeneficiary`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const body = {
+      beneficiary_id: beneficiaryId,
+      beneficiary_name: profile.accountHolderName,
+      beneficiary_instrument_details:
+        profile.method === PayoutMethod.UPI
+          ? {
+              vpa: profile.upiId,
+            }
+          : {
+              bank_account_number: profile.accountNumber,
+              bank_ifsc: profile.ifsc,
+            },
+      beneficiary_contact_details: {
+        beneficiary_email: `${profile.userId.replace(/-/g, '').slice(0, 15)}@payout.local`,
+        beneficiary_phone: '9999999999',
       },
+    };
+
+    const response = await fetch(`${getCashfreeBaseUrl()}/beneficiary`, {
+      method: 'POST',
+      headers: getCashfreeHeaders(),
       body: JSON.stringify(body),
     });
 
-    const data = (await response.json()) as { message?: string };
-    if (!response.ok) {
+    const data = (await response.json()) as {
+      message?: string;
+      code?: string;
+      type?: string;
+      beneficiary_id?: string;
+    };
+
+    // If 200/201 or already exists (409), mark as ready
+    const isAlreadyExists =
+      response.status === 409 ||
+      data.code === 'beneficiary_already_exists' ||
+      data.message?.toLowerCase().includes('already exists');
+
+    if (!response.ok && !isAlreadyExists) {
       throw new BadRequestError(
         data.message ?? 'Failed to add Cashfree beneficiary',
-        `Cashfree addBeneficiary failed: ${JSON.stringify(data)}`
+        `Cashfree createBeneficiary failed: ${JSON.stringify(data)}`
       );
     }
 
@@ -103,6 +87,9 @@ export class CashfreePayoutService implements PayoutProvider {
     return updated ?? profile;
   }
 
+  /**
+   * Initiate fund transfer on Cashfree via V2 Transfers API.
+   */
   async createPayout(
     profile: IPayoutProfile,
     amount: number,
@@ -115,34 +102,84 @@ export class CashfreePayoutService implements PayoutProvider {
       );
     }
 
-    const token = await getCashfreeToken();
-    const response = await fetch(`${getCashfreeBaseUrl()}/v1/requestTransfer`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const body = {
+      transfer_id: referenceId,
+      transfer_amount: Number(amount.toFixed(2)),
+      transfer_mode: profile.method === PayoutMethod.UPI ? 'upi' : 'bank',
+      beneficiary_details: {
+        beneficiary_id: profile.cashfreeBeneficiaryId,
       },
-      body: JSON.stringify({
-        beneId: profile.cashfreeBeneficiaryId,
-        amount: amount.toFixed(2),
-        transferId: referenceId,
-      }),
+    };
+
+    const response = await fetch(`${getCashfreeBaseUrl()}/transfers`, {
+      method: 'POST',
+      headers: getCashfreeHeaders(),
+      body: JSON.stringify(body),
     });
 
-    const data = (await response.json()) as CashfreeTransferResponse;
-    if (!response.ok || !data.data?.transfer_id) {
+    const data = (await response.json()) as {
+      transfer_id?: string;
+      cf_transfer_id?: string;
+      status?: string;
+      status_code?: string;
+      message?: string;
+    };
+
+    if (!response.ok) {
       throw new BadRequestError(
         data.message ?? 'Cashfree transfer failed',
-        `Cashfree requestTransfer failed: ${JSON.stringify(data)}`
+        `Cashfree transfer failed: ${JSON.stringify(data)}`
       );
     }
 
-    const status = data.data.status?.toUpperCase();
+    const status = (data.status || data.status_code || '').toUpperCase();
+    const providerPayoutId =
+      data.cf_transfer_id || data.transfer_id || referenceId;
+
+    if (status === 'FAILED' || status === 'REJECTED') {
+      throw new BadRequestError(
+        data.message ?? 'Cashfree transfer was rejected',
+        `Cashfree transfer failed: ${JSON.stringify(data)}`
+      );
+    }
+
     return {
-      providerPayoutId: data.data.transfer_id,
+      providerPayoutId,
       status: status === 'SUCCESS' ? 'success' : 'processing',
       rawResponse: data as unknown as Record<string, unknown>,
     };
+  }
+
+  /**
+   * Query account status / balance from Cashfree.
+   */
+  async getAccountBalance(): Promise<{
+    balance: number;
+    currency: string;
+    isConfigured: boolean;
+  }> {
+    if (!env.CASHFREE_CLIENT_ID || !env.CASHFREE_CLIENT_SECRET) {
+      return { balance: 0, currency: 'INR', isConfigured: false };
+    }
+
+    try {
+      const response = await fetch(`${getCashfreeBaseUrl()}/transfers?limit=1`, {
+        method: 'GET',
+        headers: getCashfreeHeaders(),
+      });
+
+      if (!response.ok) {
+        return { balance: 0, currency: 'INR', isConfigured: false };
+      }
+
+      return {
+        balance: 0,
+        currency: 'INR',
+        isConfigured: true,
+      };
+    } catch {
+      return { balance: 0, currency: 'INR', isConfigured: false };
+    }
   }
 }
 

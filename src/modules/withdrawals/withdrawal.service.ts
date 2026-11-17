@@ -595,10 +595,30 @@ export class WithdrawalService {
   }
 
   async handleCashfreeWebhook(payload: Record<string, unknown>) {
+    const data =
+      payload.data && typeof payload.data === 'object'
+        ? (payload.data as Record<string, unknown>)
+        : payload;
+
     const transferId =
-      typeof payload.transferId === 'string' ? payload.transferId : undefined;
-    const status =
-      typeof payload.status === 'string' ? payload.status.toUpperCase() : '';
+      (typeof data.transferId === 'string'
+        ? data.transferId
+        : typeof data.transfer_id === 'string'
+        ? data.transfer_id
+        : typeof payload.transferId === 'string'
+        ? payload.transferId
+        : typeof payload.transfer_id === 'string'
+        ? payload.transfer_id
+        : undefined);
+
+    const event = typeof payload.event === 'string' ? payload.event.toUpperCase() : '';
+    const status = (
+      typeof data.status === 'string'
+        ? data.status
+        : typeof payload.status === 'string'
+        ? payload.status
+        : ''
+    ).toUpperCase();
 
     if (!transferId) return;
 
@@ -606,19 +626,39 @@ export class WithdrawalService {
       await withdrawalRepository.findByProviderReferenceOrPayoutId(transferId);
     if (!withdrawal) return;
 
-    if (status === 'SUCCESS') {
+    const utr =
+      typeof data.utr === 'string'
+        ? data.utr
+        : typeof payload.utr === 'string'
+        ? payload.utr
+        : undefined;
+
+    if (status === 'SUCCESS' || event === 'TRANSFER_SUCCESS') {
       await withdrawalRepository.updateStatus(
         withdrawal._id,
-        WithdrawalStatus.SUCCESS
+        WithdrawalStatus.SUCCESS,
+        undefined,
+        utr
       );
       return;
     }
 
-    if (status === 'FAILED' || status === 'REVERSED') {
+    if (
+      status === 'FAILED' ||
+      status === 'REVERSED' ||
+      event === 'TRANSFER_FAILED' ||
+      event === 'TRANSFER_REVERSED'
+    ) {
       const reason =
-        typeof payload.reason === 'string'
+        (typeof data.reason === 'string'
+          ? data.reason
+          : typeof payload.reason === 'string'
           ? payload.reason
-          : 'Cashfree payout failed';
+          : typeof data.message === 'string'
+          ? data.message
+          : typeof payload.message === 'string'
+          ? payload.message
+          : undefined) ?? 'Cashfree payout failed';
       await this.refundFailedWithdrawal(withdrawal, reason);
     }
   }
