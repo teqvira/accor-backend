@@ -151,7 +151,7 @@ export class CashfreePayoutService implements PayoutProvider {
   }
 
   /**
-   * Query account status / balance from Cashfree.
+   * Query available balance from Cashfree Payouts.
    */
   async getAccountBalance(): Promise<{
     balance: number;
@@ -163,17 +163,62 @@ export class CashfreePayoutService implements PayoutProvider {
     }
 
     try {
-      const response = await fetch(`${getCashfreeBaseUrl()}/transfers?limit=1`, {
-        method: 'GET',
-        headers: getCashfreeHeaders(),
+      const baseUrl = getCashfreeBaseUrl();
+
+      // Step 1: Authorize to get JWT token
+      const authRes = await fetch(`${baseUrl}/v1/authorize`, {
+        method: 'POST',
+        headers: {
+          'X-Client-Id': env.CASHFREE_CLIENT_ID.trim(),
+          'X-Client-Secret': env.CASHFREE_CLIENT_SECRET.trim(),
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (!response.ok) {
+      if (!authRes.ok) {
         return { balance: 0, currency: 'INR', isConfigured: false };
       }
 
+      const authData = (await authRes.json()) as {
+        status?: string;
+        data?: { token?: string };
+      };
+
+      const token = authData.data?.token;
+      if (!token) {
+        return { balance: 0, currency: 'INR', isConfigured: false };
+      }
+
+      // Step 2: Get ledger and available balance
+      const balRes = await fetch(`${baseUrl}/v1/getBalance`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!balRes.ok) {
+        return { balance: 0, currency: 'INR', isConfigured: false };
+      }
+
+      const balData = (await balRes.json()) as {
+        status?: string;
+        data?: {
+          balance?: string | number;
+          availableBalance?: string | number;
+        };
+      };
+
+      const rawBalance =
+        balData.data?.availableBalance ?? balData.data?.balance ?? 0;
+      const balance =
+        typeof rawBalance === 'number'
+          ? rawBalance
+          : parseFloat(rawBalance) || 0;
+
       return {
-        balance: 0,
+        balance,
         currency: 'INR',
         isConfigured: true,
       };
