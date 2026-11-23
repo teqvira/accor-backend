@@ -22,9 +22,18 @@ const startServer = async () => {
     await bootstrapAdmin();
     startExpiryNotificationJob();
     startAccountDeletionJob();
-    app.listen(env.PORT, () => {
+    app.listen(env.PORT, async () => {
       console.log(`Server running on port ${env.PORT}`);
       console.log(`Auth API: http://localhost:${env.PORT}/api/auth`);
+      try {
+        const ipRes = await fetch('https://api.ipify.org', {
+          signal: AbortSignal.timeout(3000),
+        });
+        const ip = await ipRes.text();
+        console.log(`[Server Outbound IP]: ${ip}`);
+      } catch {
+        // ignore
+      }
     });
   } catch (error) {
     console.error('Failed to connect to database:', error);

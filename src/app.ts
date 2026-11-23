@@ -45,8 +45,20 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(captureDeviceContext);
 
-app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'Server is running' });
+app.get('/health', async (_req, res) => {
+  let outboundIp = 'unknown';
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json', {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (ipRes.ok) {
+      const data = (await ipRes.json()) as { ip?: string };
+      outboundIp = data.ip || 'unknown';
+    }
+  } catch {
+    // fallback if external service fails
+  }
+  res.json({ success: true, message: 'Server is running', outboundIp });
 });
 
 registerRoutes(app);

@@ -176,6 +176,10 @@ export class CashfreePayoutService implements PayoutProvider {
       });
 
       if (!authRes.ok) {
+        const errorText = await authRes.text();
+        console.error(
+          `[Cashfree getAccountBalance] Authorize failed with status ${authRes.status}: ${errorText}`
+        );
         return { balance: 0, currency: 'INR', isConfigured: false };
       }
 
@@ -186,6 +190,9 @@ export class CashfreePayoutService implements PayoutProvider {
 
       const token = authData.data?.token;
       if (!token) {
+        console.error(
+          '[Cashfree getAccountBalance] Authorize succeeded but no token returned in data'
+        );
         return { balance: 0, currency: 'INR', isConfigured: false };
       }
 
@@ -199,6 +206,10 @@ export class CashfreePayoutService implements PayoutProvider {
       });
 
       if (!balRes.ok) {
+        const errorText = await balRes.text();
+        console.error(
+          `[Cashfree getAccountBalance] getBalance failed with status ${balRes.status}: ${errorText}`
+        );
         return { balance: 0, currency: 'INR', isConfigured: false };
       }
 
@@ -222,7 +233,8 @@ export class CashfreePayoutService implements PayoutProvider {
         currency: 'INR',
         isConfigured: true,
       };
-    } catch {
+    } catch (err) {
+      console.error('[Cashfree getAccountBalance] Exception occurred:', err);
       return { balance: 0, currency: 'INR', isConfigured: false };
     }
   }
