@@ -8,6 +8,7 @@ import { env } from '../../config/env';
 import { cashfreePayoutService } from '../withdrawals/providers/cashfree-payout.provider';
 import { razorpayPayoutService } from '../withdrawals/providers/razorpay-payout.provider';
 import { PayoutProviderName } from '../withdrawals/withdrawal.constants';
+import { qrBatchRepository } from '../qr/repositories/qr-batch.repository';
 import {
   AdminWalletScanQuery,
   IWalletTransaction,
@@ -169,6 +170,7 @@ export class WalletService {
       totalWithdrawn,
       totalUserWalletBalance,
       totalScansCount,
+      unredeemedCouponsLiability,
     ] = await Promise.all([
       balancePromise,
       activeProvider === PayoutProviderName.RAZORPAY
@@ -178,11 +180,21 @@ export class WalletService {
       walletTransactionRepository.sumTotalSuccessfulWithdrawals(),
       walletTransactionRepository.sumAllUserWalletBalances(),
       walletTransactionRepository.countTotalScans(),
+      qrBatchRepository.sumActiveUnredeemedCouponsLiability(),
     ]);
 
     // Use live unsettled balance if available, otherwise DB recorded pending topups
     const unsettledBalance =
       razorpayUnsettled > 0 ? razorpayUnsettled : dbPendingTopups;
+
+    const unredeemedCouponsAmount = unredeemedCouponsLiability.totalUnredeemedAmount;
+    const totalCommittedLiability = Number(
+      (unredeemedCouponsAmount + totalUserWalletBalance).toFixed(2)
+    );
+    const availableForCouponGeneration = Math.max(
+      0,
+      Number((providerBalanceInfo.balance - totalCommittedLiability).toFixed(2))
+    );
 
     return {
       payoutProvider: activeProvider,
@@ -192,6 +204,10 @@ export class WalletService {
       totalWithdrawn,
       totalUserWalletBalance,
       totalScansCount,
+      unredeemedCouponsLiability: unredeemedCouponsAmount,
+      unredeemedCouponsCount: unredeemedCouponsLiability.totalUnredeemedCount,
+      totalCommittedLiability,
+      availableForCouponGeneration,
       isRazorpayConfigured: providerBalanceInfo.isConfigured,
       isPayoutConfigured: providerBalanceInfo.isConfigured,
       currency: providerBalanceInfo.currency,

@@ -35,6 +35,12 @@ router.get(
 );
 
 router.get(
+  '/batches/budget-limit',
+  ...adminOnly,
+  asyncHandler<AuthRequest>((req, res) => qrController.getBudgetStatus(req, res))
+);
+
+router.get(
   '/batches/:id',
   ...adminOnly,
   asyncHandler<AuthRequest>((req, res) => qrController.getBatch(req, res))

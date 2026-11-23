@@ -1,4 +1,9 @@
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors';
+import { env } from '../../../config/env';
+import { cashfreePayoutService } from '../../withdrawals/providers/cashfree-payout.provider';
+import { razorpayPayoutService } from '../../withdrawals/providers/razorpay-payout.provider';
+import { PayoutProviderName } from '../../withdrawals/withdrawal.constants';
+import { walletTransactionRepository } from '../../wallet/wallet-transaction.repository';
 import { productsService } from '../../products/products.service';
 import { productRepository } from '../../products/product.repository';
 import { qrBatchRepository } from '../repositories/qr-batch.repository';
@@ -106,8 +111,58 @@ export class QrBatchService {
     return productsService.getActiveProductById(productId);
   }
 
+  async getCouponBudgetStatus() {
+    const activeProvider = env.PAYOUT_PROVIDER;
+    const balancePromise =
+      activeProvider === PayoutProviderName.CASHFREE
+        ? cashfreePayoutService.getAccountBalance()
+        : razorpayPayoutService.getAccountBalance();
+
+    const [providerBalanceInfo, unredeemedCoupons, totalUserWalletBalance] =
+      await Promise.all([
+        balancePromise,
+        qrBatchRepository.sumActiveUnredeemedCouponsLiability(),
+        walletTransactionRepository.sumAllUserWalletBalances(),
+      ]);
+
+    const walletBalance = Number(providerBalanceInfo.balance ?? 0);
+    const unredeemedCouponsAmount = unredeemedCoupons.totalUnredeemedAmount;
+    const totalCommittedLiability = Number(
+      (unredeemedCouponsAmount + totalUserWalletBalance).toFixed(2)
+    );
+    const availableAmount = Math.max(
+      0,
+      Number((walletBalance - totalCommittedLiability).toFixed(2))
+    );
+
+    return {
+      walletBalance,
+      unredeemedCouponsAmount,
+      unredeemedCouponsCount: unredeemedCoupons.totalUnredeemedCount,
+      totalUserWalletBalance,
+      totalCommittedLiability,
+      availableAmount,
+      currency: providerBalanceInfo.currency ?? 'INR',
+      isConfigured: providerBalanceInfo.isConfigured,
+      provider: activeProvider,
+    };
+  }
+
   async createBatch(input: CreateBatchInput) {
     await this.getActiveProductForBatch(input.productId);
+
+    // Validate wallet balance / available coupon budget
+    const batchTotalValue = Number(input.totalQrs) * Number(input.couponValue);
+    if (batchTotalValue > 0) {
+      const budget = await this.getCouponBudgetStatus();
+      if (batchTotalValue > budget.availableAmount) {
+        throw new BadRequestError(
+          `Insufficient wallet balance to generate coupons. Total batch value (₹${batchTotalValue.toLocaleString('en-IN')}) exceeds available budget (₹${budget.availableAmount.toLocaleString('en-IN')}). Cashfree Balance: ₹${budget.walletBalance.toLocaleString('en-IN')}, Committed Liability: ₹${budget.totalCommittedLiability.toLocaleString('en-IN')}.`,
+          `createBatch: totalValue=${batchTotalValue} availableAmount=${budget.availableAmount}`
+        );
+      }
+    }
+
     // Always auto-assign BATCH-001 style code for labels (UUID stays as batchId).
     const batchName = await generateNextBatchLabel();
     const labelColor = input.color ?? DEFAULT_QR_LABEL_COLOR;
@@ -212,6 +267,24 @@ export class QrBatchService {
         'End date must be on or after start date',
         `updateBatch: id=${id}`
       );
+    }
+
+    const newTotalQrs =
+      input.totalQrs !== undefined ? input.totalQrs : existing.totalQrs;
+    const newCouponValue =
+      input.couponValue !== undefined ? input.couponValue : existing.walletAmount;
+    const oldBatchTotal = existing.totalQrs * existing.walletAmount;
+    const newBatchTotal = newTotalQrs * newCouponValue;
+    const delta = newBatchTotal - oldBatchTotal;
+
+    if (delta > 0) {
+      const budget = await this.getCouponBudgetStatus();
+      if (delta > budget.availableAmount) {
+        throw new BadRequestError(
+          `Insufficient wallet balance to update coupons. Additional required amount (₹${delta.toLocaleString('en-IN')}) exceeds available budget (₹${budget.availableAmount.toLocaleString('en-IN')}).`,
+          `updateBatch: delta=${delta} availableAmount=${budget.availableAmount}`
+        );
+      }
     }
 
     const updated = await qrBatchRepository.update(id, {

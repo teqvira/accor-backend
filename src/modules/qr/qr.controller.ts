@@ -19,6 +19,11 @@ export class QrController {
     sendSuccess(res, 'QR batch created successfully', { batch }, 201);
   }
 
+  async getBudgetStatus(_req: AuthRequest, res: Response): Promise<void> {
+    const result = await qrBatchService.getCouponBudgetStatus();
+    sendSuccess(res, 'Coupon budget status fetched successfully', result);
+  }
+
   async listBatches(req: AuthRequest, res: Response): Promise<void> {
     const page = getQueryNumber(req.query.page, 1);
     const limit = getQueryNumber(req.query.limit, 20);

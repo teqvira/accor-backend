@@ -342,6 +342,42 @@ export const qrBatchRepository = {
     return result.rows[0] ? mapQrBatchRow(result.rows[0]) : null;
   },
 
+  sumActiveUnredeemedCouponsLiability: async (): Promise<{
+    totalUnredeemedAmount: number;
+    totalUnredeemedCount: number;
+  }> => {
+    const result = await pool.query<{
+      total_unredeemed_amount: string;
+      total_unredeemed_count: string;
+    }>(
+      `SELECT COALESCE(
+         SUM(
+           GREATEST(0, b.total_qrs - COALESCE(rc.redeemed_count, 0)) * b.wallet_amount
+         ),
+         0
+       )::numeric(14, 2) AS total_unredeemed_amount,
+       COALESCE(
+         SUM(GREATEST(0, b.total_qrs - COALESCE(rc.redeemed_count, 0))),
+         0
+       )::bigint AS total_unredeemed_count
+       FROM qr_batches b
+       LEFT JOIN (
+         SELECT batch_id, COUNT(*) AS redeemed_count
+         FROM qr_codes
+         WHERE redeemed = true
+         GROUP BY batch_id
+       ) rc ON rc.batch_id = b.id
+       WHERE b.active = true
+         AND (b.end_date IS NULL OR b.end_date >= CURRENT_DATE)`
+    );
+
+    const row = result.rows[0];
+    return {
+      totalUnredeemedAmount: Number(row?.total_unredeemed_amount ?? 0),
+      totalUnredeemedCount: Number(row?.total_unredeemed_count ?? 0),
+    };
+  },
+
   findOptionsByProductId: async (
     productId?: string,
     search?: string
