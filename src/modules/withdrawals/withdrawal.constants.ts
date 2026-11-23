@@ -18,5 +18,5 @@ export enum PayoutProviderName {
   DECENTRO = 'decentro',
 }
 
-export const WITHDRAWAL_COOLDOWN_DAYS = 7;
+export const WITHDRAWAL_COOLDOWN_DAYS = 0;
 

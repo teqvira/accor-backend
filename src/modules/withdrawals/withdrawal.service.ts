@@ -161,6 +161,10 @@ export class WithdrawalService {
     userId: string,
     now: Date = new Date()
   ): void {
+    if (WITHDRAWAL_COOLDOWN_DAYS <= 0) {
+      return;
+    }
+
     const createdAtTime = new Date(latest.createdAt).getTime();
     if (isNaN(createdAtTime)) {
       return;
@@ -253,9 +257,11 @@ export class WithdrawalService {
       );
     }
 
-    const latest = await withdrawalRepository.findLatestByUserId(userId);
-    if (latest) {
-      this.assertWithdrawalCooldown(latest, userId);
+    if (WITHDRAWAL_COOLDOWN_DAYS > 0) {
+      const latest = await withdrawalRepository.findLatestByUserId(userId);
+      if (latest) {
+        this.assertWithdrawalCooldown(latest, userId);
+      }
     }
 
     const user = await userRepository.findById(userId);
@@ -408,12 +414,14 @@ export class WithdrawalService {
         );
       }
 
-      const latest = await withdrawalRepository.findLatestByUserId(
-        userId,
-        client
-      );
-      if (latest) {
-        this.assertWithdrawalCooldown(latest, userId);
+      if (WITHDRAWAL_COOLDOWN_DAYS > 0) {
+        const latest = await withdrawalRepository.findLatestByUserId(
+          userId,
+          client
+        );
+        if (latest) {
+          this.assertWithdrawalCooldown(latest, userId);
+        }
       }
 
       const createdWithdrawal = await withdrawalRepository.create(
