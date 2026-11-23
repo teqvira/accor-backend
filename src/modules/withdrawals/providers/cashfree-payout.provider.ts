@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { env } from '../../../config/env';
 import { BadRequestError } from '../../../shared/utils/errors';
 import { PayoutMethod } from '../withdrawal.constants';
@@ -31,11 +32,20 @@ export class CashfreePayoutService implements PayoutProvider {
    * Register or verify the beneficiary on Cashfree (Payouts V2 API).
    */
   async ensureFundAccount(profile: IPayoutProfile): Promise<IPayoutProfile> {
-    if (profile.cashfreeBeneficiaryId) {
+    const destinationKey =
+      profile.method === PayoutMethod.UPI
+        ? (profile.upiId || '').toLowerCase().trim()
+        : `${(profile.accountNumber || '').trim()}_${(profile.ifsc || '').toUpperCase().trim()}`;
+    const destHash = crypto
+      .createHash('md5')
+      .update(destinationKey)
+      .digest('hex')
+      .slice(0, 8);
+    const beneficiaryId = `bene_${profile.userId.replace(/-/g, '').slice(0, 16)}_${destHash}`;
+
+    if (profile.cashfreeBeneficiaryId === beneficiaryId) {
       return profile;
     }
-
-    const beneficiaryId = `bene_${profile.userId.replace(/-/g, '').slice(0, 20)}`;
 
     const body = {
       beneficiary_id: beneficiaryId,
@@ -84,7 +94,7 @@ export class CashfreePayoutService implements PayoutProvider {
     const updated = await payoutProfileRepository.update(profile._id, {
       cashfreeBeneficiaryId: beneficiaryId,
     });
-    return updated ?? profile;
+    return updated ?? { ...profile, cashfreeBeneficiaryId: beneficiaryId };
   }
 
   /**
@@ -122,12 +132,18 @@ export class CashfreePayoutService implements PayoutProvider {
       cf_transfer_id?: string;
       status?: string;
       status_code?: string;
+      status_description?: string;
       message?: string;
     };
 
     if (!response.ok) {
+      const errorMsg =
+        data.status_description ?? data.message ?? 'Cashfree transfer failed';
+      console.error(
+        `[Cashfree Transfer Failed] status=${response.status}, code=${data.status_code}, error=${errorMsg}`
+      );
       throw new BadRequestError(
-        data.message ?? 'Cashfree transfer failed',
+        errorMsg,
         `Cashfree transfer failed: ${JSON.stringify(data)}`
       );
     }
@@ -137,8 +153,13 @@ export class CashfreePayoutService implements PayoutProvider {
       data.cf_transfer_id || data.transfer_id || referenceId;
 
     if (status === 'FAILED' || status === 'REJECTED') {
+      const reason =
+        data.status_description ?? data.message ?? 'Cashfree transfer was rejected';
+      console.error(
+        `[Cashfree Transfer Rejected] status=${status}, code=${data.status_code}, reason=${reason}`
+      );
       throw new BadRequestError(
-        data.message ?? 'Cashfree transfer was rejected',
+        reason,
         `Cashfree transfer failed: ${JSON.stringify(data)}`
       );
     }
